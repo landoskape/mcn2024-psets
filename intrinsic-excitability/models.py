@@ -32,8 +32,8 @@ class GainRNN(nn.Module):
         super().to(device)
         self.input_background = self.input_background.to(device)
         self.recurrent_background = self.recurrent_background.to(device)
-        return self 
-    
+        return self
+
     def activation(self, x):
         return self.hidden_gain * torch.relu(x - self.hidden_threshold)
 
