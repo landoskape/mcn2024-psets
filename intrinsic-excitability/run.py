@@ -16,18 +16,13 @@ def set_directory():
     if not job_path.exists():
         job_path.mkdir(parents=True, exist_ok=True)
 
-    job_id = os.environ.get("SLURM_JOB_ID")
-    if job_id is not None:
-        directory = Path(f"./jobs/{job_id}")
-        print(f"The current Slurm job ID is: {job_id}, creating a new directory at {directory}")
+    # check existing job folders and create a new one with the lowest number possible
+    job_folders = [int(str(folder).split("/")[-1]) for folder in Path("./jobs").iterdir() if folder.is_dir()]
+    if len(job_folders) == 0:
+        directory = Path(f"./jobs/0")
     else:
-        # check existing job folders and create a new one with the lowest number possible
-        job_folders = [int(str(folder).split("/")[-1]) for folder in Path("./jobs").iterdir() if folder.is_dir()]
-        if len(job_folders) == 0:
-            directory = Path(f"./jobs/0")
-        else:
-            directory = Path(f"./jobs/{max(job_folders)+1}")
-        print(f"This script is not running as a Slurm job or SLURM_JOB_ID is not set, saving at: {directory}.")
+        directory = Path(f"./jobs/{max(job_folders)+1}")
+    print(f"This script is saving at: {directory}.")
 
     if not directory.exists():
         directory.mkdir(parents=True, exist_ok=True)
@@ -42,13 +37,13 @@ def get_args():
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=50)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
-    parser.add_argument("--num_epochs", type=int, default=50)
+    parser.add_argument("--num_epochs", type=int, default=3000)
     parser.add_argument("--start_sigma", type=float, default=0.1)
     parser.add_argument("--end_sigma", type=float, default=0.5)
-    parser.add_argument("--start_delay", type=int, default=10)
+    parser.add_argument("--start_delay", type=int, default=1)
     parser.add_argument("--end_delay", type=int, default=10)
     parser.add_argument("--input_rank", type=int, default=3)
-    parser.add_argument("--recurrent_rank", type=int, default=1)
+    parser.add_argument("--recurrent_rank", type=int, default=3)
     return parser.parse_args()
 
 
@@ -68,7 +63,7 @@ if __name__ == "__main__":
     recurrent_rank = args.recurrent_rank
 
     start_sigma = args.start_sigma
-    end_sigma = args.end_sigma
+    end_sigma = args.end_sigma    
     sigma = torch.cat(
         (start_sigma * torch.ones(num_epochs // 3), torch.linspace(start_sigma, end_sigma, num_epochs // 3), end_sigma * torch.ones(num_epochs // 3))
     )
@@ -91,9 +86,6 @@ if __name__ == "__main__":
     loss_function = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
-    # Create a scheduler for the learning rate
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 30, gamma=0.1)
-
     train_loss = torch.zeros(num_epochs)
 
     # Training loop
@@ -113,8 +105,7 @@ if __name__ == "__main__":
 
     # Save the results
     results = dict(
-        args=vars(args),
-        task=vars(task),
+        vars(args),
         train_loss=train_loss,
     )
     torch.save(results, directory / "results.pt")
