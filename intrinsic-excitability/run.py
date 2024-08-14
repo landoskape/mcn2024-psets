@@ -33,17 +33,20 @@ def set_directory():
 def get_args():
     parser = ArgumentParser(description="Intrinsic excitability")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--batch_size", type=int, default=100)
+    parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--input_dimensions", type=int, default=10)
-    parser.add_argument("--num_neurons", type=int, default=50)
+    parser.add_argument("--num_neurons", type=int, default=512)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
-    parser.add_argument("--num_epochs", type=int, default=30)
+    parser.add_argument("--num_epochs", type=int, default=3000)
     parser.add_argument("--start_sigma", type=float, default=0.1)
-    parser.add_argument("--end_sigma", type=float, default=0.5)
+    parser.add_argument("--end_sigma", type=float, default=0.1)
     parser.add_argument("--start_delay", type=int, default=1)
-    parser.add_argument("--end_delay", type=int, default=10)
+    parser.add_argument("--end_delay", type=int, default=5)
+    parser.add_argument("--start_source_floor", type=float, default=0.5)
+    parser.add_argument("--end_source_floor", type=float, default=0.5)
     parser.add_argument("--input_rank", type=int, default=3)
-    parser.add_argument("--recurrent_rank", type=int, default=3)
+    parser.add_argument("--recurrent_rank", type=int, default=2)
+    parser.add_argument("--num_models", type=int, default=1)
     return parser.parse_args()
 
 
@@ -52,6 +55,9 @@ if __name__ == "__main__":
 
     args = get_args()
     directory = set_directory()
+
+    # Number of models to train
+    num_models = args.num_models
 
     # Hyperparameters
     B = args.batch_size  # Batch size
@@ -77,40 +83,59 @@ if __name__ == "__main__":
             end_delay * torch.ones(num_epochs // 3, dtype=torch.int),
         )
     )
-    task = tasks.ContextualGoNogo(D, sigma, delay_time=1)
 
-    # Create network
-    net = models.GainRNN(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
-    net = net.to(device)
-
-    loss_function = nn.MSELoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 30, gamma=0.3)
-
-    train_loss = torch.zeros(num_epochs)
-
-    # Training loop
-    for epoch in range(num_epochs):
-        X, target, params = task.generate_data(B, sigma=sigma[epoch], delay_time=delay_time[epoch], source_strength=1.0, source_floor=0.5)
-
-        optimizer.zero_grad()
-        outputs, hidden = net(X.to(device), return_hidden=True)
-        loss = loss_function(outputs, target.to(device))
-        loss.backward()
-        optimizer.step()
-
-        train_loss[epoch] = loss.item()
-
-        if (epoch + 1) % max(num_epochs // 100, 1) == 0:
-            print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
-
-    # Save the results
-    results = dict(
-        vars(args),
-        train_loss=train_loss,
+    start_source_floor = args.start_source_floor
+    end_source_floor = args.end_source_floor
+    source_floor = torch.cat(
+        (
+            start_source_floor * torch.ones(num_epochs // 3),
+            torch.linspace(start_source_floor, end_source_floor, num_epochs // 3),
+            end_source_floor * torch.ones(num_epochs // 3),
+        )
     )
-    torch.save(results, directory / "results.pt")
 
-    # Save the network
-    torch.save(net.state_dict(), directory / "model.pt")
+    task = tasks.ContextualGoNogo(D, sigma, delay_time=1, num_contexts=2)
+    loss_function = nn.MSELoss()
+
+    for imodel in range(num_models):
+        # Create network
+        net = models.GainRNN(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
+        net = net.to(device)
+
+        optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 3, gamma=0.3)
+
+        train_loss = torch.zeros(num_epochs)
+
+        # Training loop
+        for epoch in range(num_epochs):
+            X, target, params = task.generate_data(
+                B,
+                sigma=sigma[epoch],
+                delay_time=delay_time[epoch],
+                source_strength=1.0,
+                source_floor=source_floor[epoch],
+            )
+
+            optimizer.zero_grad()
+            outputs, hidden = net(X.to(device), return_hidden=True)
+            loss = loss_function(outputs, target.to(device))
+            loss.backward()
+            optimizer.step()
+
+            train_loss[epoch] = loss.item()
+
+            if (epoch + 1) % max(num_epochs // 100, 1) == 0:
+                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
+        
+        # Save the results
+        results = dict(
+            args=vars(args),
+            task=vars(task),
+            train_loss=train_loss,
+        )
+        torch.save(results, directory / f"results_{imodel}.pt")
+
+        # Save the network
+        torch.save(net.state_dict(), directory / f"model_{imodel}.pt")
