@@ -47,6 +47,20 @@ def load_job(job_id, model_index=None, init=False):
     return model, results
 
 
+def load_results(job_id):
+    # find all results files
+    results_files = list(filepath.glob(f"{job_id}/results_*.pt"))
+    results = []
+    for results_file in results_files:
+        results.append(torch.load(results_file, map_location=torch.device("cpu")))
+    # Group train_* as a tensor from each results file
+    train_loss = torch.stack([r["train_loss"] for r in results])
+    train_accuracy = torch.stack([r["train_accuracy"] for r in results])
+    train_evidence = torch.stack([r["train_evidence"] for r in results])
+    train_fixation = torch.stack([r["train_fixation"] for r in results])
+    return train_loss, train_accuracy, train_evidence, train_fixation
+
+
 def load_perturbation(job_id, suffix=""):
     if suffix != "" and suffix[0] != "_":
         suffix = f"_{suffix}"
