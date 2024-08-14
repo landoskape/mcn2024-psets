@@ -107,7 +107,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
     def _update_parameter(parameter, perturb_ratio):
         update = perturb_ratio * parameter * torch.randn_like(parameter)
         return parameter + update
-    
+
     pnet = deepcopy(net)
     pnet.eval()
 
@@ -132,7 +132,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         if perturb_target == "intrinsic":
             pnet.hidden_gain.data = _update_parameter(base_hidden_gain, perturb_ratio)
             if learning_tau:
-                # the tau must be positive so it's passed through an exponential. 
+                # the tau must be positive so it's passed through an exponential.
                 # we want the perturb_ratio to be accurate post-exponential -- so need to wrangle a bit
                 new_tau = _update_parameter(torch.exp(base_hidden_tau), perturb_ratio)
                 pnet.hidden_tau.data = torch.log(new_tau)
