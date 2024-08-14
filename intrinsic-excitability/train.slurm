@@ -23,7 +23,7 @@ conda activate networkAlignmentAnalysis
 start_time=$(date +%s)
 
 # this is the command that initiates the processes
-python intrinsic-excitability/run.py --num_models 100
+python intrinsic-excitability/run.py --num_models 100 --network_type Tau
 
 # record the end time
 end_time=$(date +%s)
