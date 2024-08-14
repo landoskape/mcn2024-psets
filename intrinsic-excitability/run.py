@@ -45,7 +45,7 @@ def get_args():
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--start_sigma", type=float, default=0.1)
     parser.add_argument("--end_sigma", type=float, default=0.5)
-    parser.add_argument("--start_delay", type=int, default=1)
+    parser.add_argument("--start_delay", type=int, default=10)
     parser.add_argument("--end_delay", type=int, default=10)
     parser.add_argument("--input_rank", type=int, default=3)
     parser.add_argument("--recurrent_rank", type=int, default=1)
@@ -91,6 +91,9 @@ if __name__ == "__main__":
     loss_function = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
+    # Create a scheduler for the learning rate
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 30, gamma=0.1)
+
     train_loss = torch.zeros(num_epochs)
 
     # Training loop
@@ -110,7 +113,8 @@ if __name__ == "__main__":
 
     # Save the results
     results = dict(
-        vars(args),
+        args=vars(args),
+        task=vars(task),
         train_loss=train_loss,
     )
     torch.save(results, directory / "results.pt")
