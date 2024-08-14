@@ -4,7 +4,8 @@ from pathlib import Path
 import socket
 import getpass
 
-
+import numpy as np
+from scipy.optimize import curve_fit
 import torch
 import torch.nn as nn
 
@@ -42,6 +43,29 @@ def load_job(job_id, model_index=None):
     return model, results
 
 
+def load_perturbation(job_id):
+    perturb = torch.load(filepath / f"{job_id}" / "perturb_results.pt", map_location=device)
+    return perturb
+
+
+def create_cdf_proportional_bins(num_bins, std_dev=1, range_multiplier=2):
+    # Define the range of the distribution (e.g., ±4 standard deviations)
+    lower_bound = -range_multiplier * std_dev
+    upper_bound = range_multiplier * std_dev
+
+    # Create evenly spaced probabilities
+    probabilities = torch.linspace(0, 1, num_bins + 1)
+
+    # Use the inverse CDF (icdf) to get the bin edges
+    normal = torch.distributions.Normal(loc=0, scale=std_dev)
+    bin_edges = normal.icdf(probabilities)
+
+    # Clip the bin edges to the defined range
+    bin_edges = torch.clamp(bin_edges, lower_bound, upper_bound)
+
+    return bin_edges
+
+
 def measure_choice(task, output):
     start_decision = task.stim_time + task.delay_time
     evidence = output[:, start_decision:].sum(dim=1)
@@ -49,8 +73,34 @@ def measure_choice(task, output):
     return choice, evidence
 
 
+def sigmoid(x, L, x0, k, b):
+    """
+    Sigmoid function
+    L: the curve's maximum value
+    x0: the x-value of the sigmoid's midpoint
+    k: the steepness of the curve
+    b: the y-axis intercept
+    """
+    return L / (1 + np.exp(-k * (x - x0))) + b
+
+
+def fit_sigmoid(s, p):
+    """
+    Fit sigmoid function to data using curve_fit
+    s: stimulus values
+    p: proportion values
+    """
+    # Initial parameter guesses
+    p0 = [max(p), np.median(s), 1, min(p)]
+
+    # Fit the function
+    popt, _ = curve_fit(sigmoid, s, p, p0, method="lm")
+
+    return popt
+
+
 @torch.no_grad()
-def test_and_perturb(net, task, perturb_ratio=0.1, perturb_target="intrinsic", num_trials=100, verbose=False):
+def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_target="intrinsic", num_trials=100, verbose=False):
     pnet = deepcopy(net)
     pnet.eval()
 
@@ -65,6 +115,7 @@ def test_and_perturb(net, task, perturb_ratio=0.1, perturb_target="intrinsic", n
         raise ValueError(f"Unknown perturb target: {perturb_target}, recognized: 'intrinsic', 'receptive', 'projective'")
 
     loss = torch.zeros(num_trials)
+    psychometric = torch.zeros(num_trials, len(psychometric_edges) - 1)
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
     for trial in progress:
         if perturb_target == "intrinsic":
@@ -76,15 +127,22 @@ def test_and_perturb(net, task, perturb_ratio=0.1, perturb_target="intrinsic", n
         elif perturb_target == "projective":
             pnet.reccurent_projective.data = base_reccurent_projective + torch.randn_like(base_reccurent_projective) * perturb_ratio
 
-        X, target, _ = task.generate_data(100, source_floor=0.1)
+        X, target, params = task.generate_data(100, source_floor=0.1)
         outputs = pnet(X, return_hidden=False)
+
+        s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
+        choice = measure_choice(task, outputs)[0]
+        s_index = torch.bucketize(s_target, psychometric_edges)
+        for i in range(len(psychometric_edges) - 1):
+            if torch.sum(s_index == i) > 0:
+                psychometric[trial, i] = torch.mean(choice[s_index == i].float())
 
         loss[trial] = nn.MSELoss(reduction="sum")(outputs, target).item()
 
-    return loss
+    return loss, psychometric
 
 
-def evaluate_model(jobid, model_index, perturb_ratios, num_trials):
+def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges):
     # Load trained model and results
     model, results = load_job(jobid, model_index=model_index)
 
@@ -119,10 +177,20 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials):
     loss_receptive = torch.zeros(num_ratios, num_trials)
     loss_projective = torch.zeros(num_ratios, num_trials)
 
+    psychometric_intrinsic = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
+    psychometric_receptive = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
+    psychometric_projective = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
+
     for i, perturb_ratio in enumerate(tqdm(perturb_ratios)):
-        loss_intrinsic[i] = test_and_perturb(net, task, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials)
-        loss_receptive[i] = test_and_perturb(net, task, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials)
-        loss_projective[i] = test_and_perturb(net, task, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials)
+        loss_intrinsic[i], psychometric_intrinsic[i] = test_and_perturb(
+            net, task, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
+        )
+        loss_receptive[i], psychometric_receptive[i] = test_and_perturb(
+            net, task, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials
+        )
+        loss_projective[i], psychometric_projective[i] = test_and_perturb(
+            net, task, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials
+        )
 
     results = dict(
         jobid=jobid,
@@ -134,6 +202,10 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials):
         loss_intrinsic=loss_intrinsic,
         loss_receptive=loss_receptive,
         loss_projective=loss_projective,
+        psychometric_edges=psychometric_edges,
+        psychometric_intrinsic=psychometric_intrinsic,
+        psychometric_receptive=psychometric_receptive,
+        psychometric_projective=psychometric_projective,
     )
 
     return results
@@ -145,12 +217,11 @@ if __name__ == "__main__":
 
     # Get all models (from the directory, of the form f"model_{i}.pt")
     model_indices = sorted([int(f.stem.split("_")[-1]) for f in directory.glob("model_*.pt")])
-    model_indices = model_indices[:2]
 
     # Set up perturbation analyses
-    perturb_ratios = torch.logspace(-3, -1, 2)
+    perturb_ratios = torch.linspace(0, 1, 11)
     num_ratios = len(perturb_ratios)
-    num_trials = 5
+    num_trials = 100
 
     num_models = len(model_indices)
 
@@ -158,11 +229,19 @@ if __name__ == "__main__":
     loss_receptive = torch.zeros(num_models, num_ratios, num_trials)
     loss_projective = torch.zeros(num_models, num_ratios, num_trials)
 
+    psychometric_edges = create_cdf_proportional_bins(20, std_dev=1, range_multiplier=2)
+    psychometric_intrinsic = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
+    psychometric_receptive = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
+    psychometric_projective = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
+
     for i, model_index in enumerate(tqdm(model_indices)):
-        results = evaluate_model(jobid, model_index, perturb_ratios, num_trials)
+        results = evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges)
         loss_intrinsic[i] = results["loss_intrinsic"]
         loss_receptive[i] = results["loss_receptive"]
         loss_projective[i] = results["loss_projective"]
+        psychometric_intrinsic[i] = torch.mean(results["psychometric_intrinsic"], dim=2)
+        psychometric_receptive[i] = torch.mean(results["psychometric_receptive"], dim=2)
+        psychometric_projective[i] = torch.mean(results["psychometric_projective"], dim=2)
 
     results = dict(
         jobid=jobid,
@@ -171,6 +250,10 @@ if __name__ == "__main__":
         loss_intrinsic=loss_intrinsic,
         loss_receptive=loss_receptive,
         loss_projective=loss_projective,
+        psychometric_edges=psychometric_edges,
+        psychometric_intrinsic=psychometric_intrinsic,
+        psychometric_receptive=psychometric_receptive,
+        psychometric_projective=psychometric_projective,
     )
 
     torch.save(results, directory / "perturb_results.pt")
