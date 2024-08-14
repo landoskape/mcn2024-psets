@@ -77,7 +77,7 @@ if __name__ == "__main__":
             end_delay * torch.ones(num_epochs // 3, dtype=torch.int),
         )
     )
-    task = tasks.GoNogo(D, sigma, delay_time=1)
+    task = tasks.ContextualGoNogo(D, sigma, delay_time=1)
 
     # Create network
     net = models.GainRNN(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
