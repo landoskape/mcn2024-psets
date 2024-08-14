@@ -38,8 +38,8 @@ filepath = PATH_REGISTRY[hostname]
 
 def load_job(job_id, model_index=None):
     suffix = "" if model_index is None else f"_{model_index}"
-    model = torch.load(filepath / f"{job_id}" / f"model{suffix}.pt", map_location=device)
-    results = torch.load(filepath / f"{job_id}" / f"results{suffix}.pt", map_location=device)
+    model = torch.load(filepath / f"{job_id}" / f"model{suffix}.pt", map_location=torch.device("cpu"))
+    results = torch.load(filepath / f"{job_id}" / f"results{suffix}.pt", map_location=torch.device("cpu"))
     return model, results
 
 
