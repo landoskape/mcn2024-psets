@@ -20,8 +20,8 @@ class RNN(nn.Module, ABC):
         self.set_recurrent_intrinsic()
 
         # Recurrent layer connections
-        self.reccurent_projective = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)))
-        self.reccurent_receptive = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)))
+        self.reccurent_projective = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / hidden_dim)
+        self.reccurent_receptive = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / hidden_dim)
 
         # Readout layer
         self.readout = nn.Linear(hidden_dim, output_dim)
@@ -57,7 +57,7 @@ class RNN(nn.Module, ABC):
         for step in range(seq_length):
             x_in = (self.input_weight() @ x[:, step].T).T
             r_in = (self.J() @ h.T).T
-            dh = -h + self.activation(r_in + x_in) / self.hidden_dim
+            dh = -h + self.activation(r_in + x_in)
             h = self.update_hidden(h, dh)
             if return_hidden:
                 hidden[:, step] = h

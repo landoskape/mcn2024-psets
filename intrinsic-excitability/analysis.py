@@ -182,7 +182,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         model_constructor = models.TauRNN
     else:
         raise ValueError(f"Did not recognize network type -- {args['network_type']}")
-    
+
     net = model_constructor(
         task.input_dimensionality(),
         args["num_neurons"],
