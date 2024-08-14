@@ -104,12 +104,20 @@ def fit_sigmoid(s, p):
 
 @torch.no_grad()
 def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_target="intrinsic", num_trials=100, verbose=False):
+    def _update_parameter(parameter, perturb_ratio):
+        update = perturb_ratio * parameter * torch.randn_like(parameter)
+        return parameter + update
+    
     pnet = deepcopy(net)
     pnet.eval()
 
+    learning_tau = type(pnet) == models.TauRNN
     if perturb_target == "intrinsic":
         base_hidden_gain = pnet.hidden_gain.data.clone()
-        base_hidden_threshold = pnet.hidden_threshold.data.clone()
+        if learning_tau:
+            base_hidden_tau = pnet.hidden_tau.data.clone()
+        else:
+            base_hidden_threshold = pnet.hidden_threshold.data.clone()
     elif perturb_target == "receptive":
         base_reccurent_receptive = pnet.reccurent_receptive.data.clone()
     elif perturb_target == "projective":
@@ -122,13 +130,18 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
     for trial in progress:
         if perturb_target == "intrinsic":
-            pnet.hidden_gain.data = base_hidden_gain + torch.randn_like(base_hidden_gain) * perturb_ratio
-            pnet.hidden_threshold.data = base_hidden_threshold + torch.randn_like(base_hidden_threshold) * perturb_ratio
+            pnet.hidden_gain.data = _update_parameter(base_hidden_gain, perturb_ratio)
+            if learning_tau:
+                # the tau must be positive so it's passed through an exponential. 
+                # we want the perturb_ratio to be accurate post-exponential -- so need to wrangle a bit
+                new_tau = _update_parameter(torch.exp(base_hidden_tau), perturb_ratio)
+                pnet.hidden_tau.data = torch.log(new_tau)
+            else:
+                pnet.hidden_threshold.data = _update_parameter(base_hidden_threshold, perturb_ratio)
         elif perturb_target == "receptive":
-
-            pnet.reccurent_receptive.data = base_reccurent_receptive + torch.randn_like(base_reccurent_receptive) * perturb_ratio
+            pnet.reccurent_receptive.data = _update_parameter(base_reccurent_receptive, perturb_ratio)
         elif perturb_target == "projective":
-            pnet.reccurent_projective.data = base_reccurent_projective + torch.randn_like(base_reccurent_projective) * perturb_ratio
+            pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
 
         X, target, params = task.generate_data(100, source_floor=0.1)
         outputs = pnet(X.to(device), return_hidden=False)
