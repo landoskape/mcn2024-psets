@@ -49,6 +49,7 @@ def get_args():
     parser.add_argument("--recurrent_rank", type=int, default=2)
     parser.add_argument("--num_models", type=int, default=1)
     parser.add_argument("--no_recurrent_learning", default=False, action="store_true")
+    parser.add_argument("--no_intrinsic_learning", default=False, action="store_true")
     return parser.parse_args()
 
 
@@ -112,6 +113,12 @@ if __name__ == "__main__":
 
         if args.no_recurrent_learning:
             turn_off = ["reccurent_receptive", "reccurent_projective"]
+            for name, prm in net.named_parameters():
+                if name in turn_off:
+                    prm.requires_grad = False
+
+        if args.no_intrinsic_learning:
+            turn_off = ["hidden_gain", "hidden_threshold", "hidden_tau"]
             for name, prm in net.named_parameters():
                 if name in turn_off:
                     prm.requires_grad = False
