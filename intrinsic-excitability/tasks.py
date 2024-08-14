@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import torch
+from analysis import measure_choice
 
 
 class Task(ABC):
@@ -117,6 +118,13 @@ class ContextualGoNogo(Task):
 
     def sequence_length(self):
         return self.stim_time + self.delay_time + self.decision_time
+
+    def analyze_response(self, output):
+        # Measure choice, measure evidence
+        choice, evidence = measure_choice(self, output)
+        # Measure fixation error (ability to hold fixation before decision time)
+        fixation = torch.sum(output[:, : self.stim_time + self.delay_time] ** 2, dim=(1, 2))
+        return choice, evidence, fixation
 
     def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0):
         """Generate a batch of data with B batch elements"""
