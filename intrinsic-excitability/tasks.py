@@ -121,44 +121,6 @@ class ContextualGoNogo(Task):
     def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0):
         """Generate a batch of data with B batch elements"""
         # Generate random source strength
-        source = self._generate_source(B, source_strength, source_floor)
-
-        # Determine noise strength
-        sigma = sigma or self.sigma
-        delay_time = delay_time or self.delay_time
-
-        # Generate noise
-        noise = torch.randn(B, self.stim_time, self.D) * sigma
-
-        # Add signal to noise
-        X = noise + source.unsqueeze(1).unsqueeze(2) * self.cursor.unsqueeze(0).unsqueeze(1)
-        X = torch.cat([X, torch.zeros(B, delay_time + self.decision_time, self.D)], dim=1)
-
-        # Measure the empirical source strength with noise, and generate labels
-        s_empirical = torch.mean(X @ self.cursor, dim=1)
-        labels = (s_empirical > 0).long()  # (targets - 1 means Go, 0 means NoGo)
-
-        # Add fixation trigger
-        fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
-        fixation[:, : self.stim_time + delay_time] = 1.0
-        X = torch.cat([X, fixation], dim=2)
-
-        # Build target
-        predecision = torch.zeros((B, self.stim_time + delay_time, self.output_dimensionality()))
-        postdecision = torch.zeros(B, self.output_dimensionality())
-        postdecision = torch.scatter(postdecision, 1, labels.unsqueeze(1), 1).unsqueeze(1).expand(-1, self.decision_time, -1)
-        target = torch.cat([predecision, postdecision], dim=1)
-
-        # Data params
-        params = dict(
-            sigma=sigma,
-            s_empirical=s_empirical,
-        )
-        return X, target, params
-
-    def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0):
-        """Generate a batch of data with B batch elements"""
-        # Generate random source strength
         sources = torch.stack([self._generate_source(B, source_strength, source_floor) for _ in range(self.num_contexts)], dim=1)
         cursor_signal = torch.sum(sources.unsqueeze(2) * self.cursors.unsqueeze(0), dim=1)
 
@@ -192,12 +154,19 @@ class ContextualGoNogo(Task):
 
         X = torch.cat([X, context_inputs.unsqueeze(1).expand(-1, X.size(1), -1)], dim=2)
 
+        # Build target
+        predecision = torch.zeros((B, self.stim_time + delay_time, self.output_dimensionality()))
+        postdecision = torch.zeros(B, self.output_dimensionality())
+        postdecision = torch.scatter(postdecision, 1, labels.unsqueeze(1), 1).unsqueeze(1).expand(-1, self.decision_time, -1)
+        target = torch.cat([predecision, postdecision], dim=1)
+
         # Data params
         params = dict(
             s_empirical=s_empirical,
             context_idx=context_idx,
+            labels=labels,
         )
-        return X, labels, params
+        return X, target, params
 
 
 # class VarGoNogo(GoNogo):
