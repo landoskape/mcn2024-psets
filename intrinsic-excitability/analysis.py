@@ -252,9 +252,9 @@ if __name__ == "__main__":
         loss_intrinsic[i] = results["loss_intrinsic"]
         loss_receptive[i] = results["loss_receptive"]
         loss_projective[i] = results["loss_projective"]
-        psychometric_intrinsic[i] = torch.mean(results["psychometric_intrinsic"], dim=2)
-        psychometric_receptive[i] = torch.mean(results["psychometric_receptive"], dim=2)
-        psychometric_projective[i] = torch.mean(results["psychometric_projective"], dim=2)
+        psychometric_intrinsic[i] = torch.mean(results["psychometric_intrinsic"], dim=1)
+        psychometric_receptive[i] = torch.mean(results["psychometric_receptive"], dim=1)
+        psychometric_projective[i] = torch.mean(results["psychometric_projective"], dim=1)
 
         # Save results every time it's finished so if the timeout happens we still have results...
         results = dict(

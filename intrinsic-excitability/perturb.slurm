@@ -23,7 +23,7 @@ conda activate networkAlignmentAnalysis
 start_time=$(date +%s)
 
 # this is the command that initiates the processes
-python intrinsic-excitability/analysis.py
+python intrinsic-excitability/analysis.py --num_trials 256 --suffix more_trials
 
 # record the end time
 end_time=$(date +%s)
