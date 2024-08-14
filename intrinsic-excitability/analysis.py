@@ -183,13 +183,13 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
 
     for i, perturb_ratio in enumerate(tqdm(perturb_ratios)):
         loss_intrinsic[i], psychometric_intrinsic[i] = test_and_perturb(
-            net, task, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
+            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
         )
         loss_receptive[i], psychometric_receptive[i] = test_and_perturb(
-            net, task, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials
+            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials
         )
         loss_projective[i], psychometric_projective[i] = test_and_perturb(
-            net, task, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials
+            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials
         )
 
     results = dict(
@@ -248,10 +248,10 @@ if __name__ == "__main__":
             jobid=jobid,
             model_indices=model_indices[:i],
             perturb_ratios=perturb_ratios,
+            psychometric_edges=psychometric_edges,
             loss_intrinsic=loss_intrinsic[:i],
             loss_receptive=loss_receptive[:i],
             loss_projective=loss_projective[:i],
-            psychometric_edges=psychometric_edges,
             psychometric_intrinsic=psychometric_intrinsic[:i],
             psychometric_receptive=psychometric_receptive[:i],
             psychometric_projective=psychometric_projective[:i],
