@@ -2,6 +2,7 @@
 data/
 *.mat
 jobs/
+slurm-*
 
 # VSCODE
 .vscode/
