@@ -13,8 +13,8 @@ class RNN(nn.Module, ABC):
         self.recurrent_rank = recurrent_rank
 
         # Input layer
-        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)))
-        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)))
+        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / hidden_dim)
+        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)) / hidden_dim)
 
         # Recurrent layer intrinsic properties
         self.set_recurrent_intrinsic()
