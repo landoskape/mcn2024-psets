@@ -1,6 +1,7 @@
 # Data and files
 data/
 *.mat
+jobs/
 
 # VSCODE
 .vscode/
