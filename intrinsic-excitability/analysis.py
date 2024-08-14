@@ -128,7 +128,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
             pnet.reccurent_projective.data = base_reccurent_projective + torch.randn_like(base_reccurent_projective) * perturb_ratio
 
         X, target, params = task.generate_data(100, source_floor=0.1)
-        outputs = pnet(X, return_hidden=False)
+        outputs = pnet(X.to(device), return_hidden=False)
 
         s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
         choice = measure_choice(task, outputs)[0]
@@ -137,7 +137,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
             if torch.sum(s_index == i) > 0:
                 psychometric[trial, i] = torch.mean(choice[s_index == i].float())
 
-        loss[trial] = nn.MSELoss(reduction="sum")(outputs, target).item()
+        loss[trial] = nn.MSELoss(reduction="sum")(outputs, target.to(device)).item()
 
     return loss, psychometric
 
