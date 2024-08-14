@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 import torch
 from torch import nn
 
 
-class GainRNN(nn.Module):
+class RNN(nn.Module, ABC):
     def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1):
         super().__init__()
         self.input_dim = input_dim
@@ -12,36 +13,36 @@ class GainRNN(nn.Module):
         self.recurrent_rank = recurrent_rank
 
         # Input layer
-        self.input_background = torch.randn((hidden_dim, input_dim)) / input_dim
         self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)))
         self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)))
 
         # Recurrent layer intrinsic properties
-        self.hidden_gain = torch.nn.Parameter(torch.randn(hidden_dim))
-        self.hidden_threshold = torch.nn.Parameter(torch.randn(hidden_dim))
+        self.set_recurrent_intrinsic()
 
         # Recurrent layer connections
-        self.recurrent_background = torch.randn((hidden_dim, hidden_dim)) / hidden_dim
         self.reccurent_projective = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)))
         self.reccurent_receptive = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)))
 
         # Readout layer
         self.readout = nn.Linear(hidden_dim, output_dim)
 
-    def to(self, device):
-        super().to(device)
-        self.input_background = self.input_background.to(device)
-        self.recurrent_background = self.recurrent_background.to(device)
-        return self
+    @abstractmethod
+    def set_recurrent_intrinsic(self):
+        """required for setting the relevant intrinsic parameters"""
 
+    @abstractmethod
     def activation(self, x):
-        return self.hidden_gain * torch.relu(x - self.hidden_threshold)
+        """required for setting the relevant activation function"""
+
+    @abstractmethod
+    def update_hidden(self, h, dh):
+        """required for updating the hidden state"""
 
     def input_weight(self):
-        return self.input_background + self.input_projective @ self.input_receptive.t()
+        return self.input_projective @ self.input_receptive.t()
 
     def J(self):
-        return self.recurrent_background + self.reccurent_projective @ self.reccurent_receptive.t()
+        return self.reccurent_projective @ self.reccurent_receptive.t()
 
     def forward(self, x, return_hidden=False):
         # Initialize hidden states and outputs
@@ -57,7 +58,7 @@ class GainRNN(nn.Module):
             x_in = (self.input_weight() @ x[:, step].T).T
             r_in = (self.J() @ h.T).T
             dh = -h + self.activation(r_in + x_in) / self.hidden_dim
-            h = h + dh
+            h = self.update_hidden(h, dh)
             if return_hidden:
                 hidden[:, step] = h
             out[:, step] = self.readout(h)
@@ -65,3 +66,33 @@ class GainRNN(nn.Module):
         if return_hidden:
             return out, hidden
         return out
+
+
+class GainRNN(RNN):
+    def set_recurrent_intrinsic(self):
+        """required for setting the relevant intrinsic parameters"""
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim))
+
+    def activation(self, x):
+        """required for setting the relevant activation function"""
+        return self.hidden_gain * torch.relu(x - self.hidden_threshold)
+
+    def update_hidden(self, h, dh):
+        """required for updating the hidden state"""
+        return h + dh
+
+
+class TauRNN(RNN):
+    def set_recurrent_intrinsic(self):
+        """required for setting the relevant intrinsic parameters"""
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim))
+
+    def activation(self, x):
+        """required for setting the relevant activation function"""
+        return self.hidden_gain * torch.relu(x)
+
+    def update_hidden(self, h, dh):
+        """required for updating the hidden state"""
+        return h + dh * torch.exp(self.hidden_tau)

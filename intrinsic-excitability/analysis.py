@@ -44,8 +44,10 @@ def load_job(job_id, model_index=None):
     return model, results
 
 
-def load_perturbation(job_id):
-    perturb = torch.load(filepath / f"{job_id}" / "perturb_results.pt", map_location=device)
+def load_perturbation(job_id, suffix=""):
+    if suffix != "" and suffix[0] != "_":
+        suffix = f"_{suffix}"
+    perturb = torch.load(filepath / f"{job_id}" / f"perturb_results{suffix}.pt", map_location=device)
     return perturb
 
 
