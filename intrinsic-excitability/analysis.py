@@ -150,8 +150,11 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         X, target, params = task.generate_data(512, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
 
-        s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
         choice, evidence, fixation = task.analyze_response(outputs)
+        choice_evidence = evidence[:, 1] - evidence[:, 0]
+        choice_evidence[params["labels"] == 0] *= -1
+
+        s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
         s_index = torch.bucketize(s_target, psychometric_edges)
         for i in range(len(psychometric_edges) - 1):
             if torch.sum(s_index == i) > 0:
@@ -159,8 +162,8 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
 
         loss[trial] = nn.MSELoss(reduction="sum")(outputs, target.to(device)).item()
         accuracy[trial] = torch.sum(choice == params["labels"]) / choice.size(0)
-        evidence[trial] = evidence[:, 1] - evidence[:, 0]
-        fixation[trial] = fixation
+        evidence[trial] = torch.mean(choice_evidence)
+        fixation[trial] = torch.mean(fixation)
 
     return loss, accuracy, evidence, fixation, psychometric
 
@@ -207,20 +210,48 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
     loss_receptive = torch.zeros(num_ratios, num_trials)
     loss_projective = torch.zeros(num_ratios, num_trials)
 
+    accuracy_intrinsic = torch.zeros(num_ratios, num_trials)
+    accuracy_receptive = torch.zeros(num_ratios, num_trials)
+    accuracy_projective = torch.zeros(num_ratios, num_trials)
+
+    evidence_intrinsic = torch.zeros(num_ratios, num_trials)
+    evidence_receptive = torch.zeros(num_ratios, num_trials)
+    evidence_projective = torch.zeros(num_ratios, num_trials)
+
+    fixation_intrinsic = torch.zeros(num_ratios, num_trials)
+    fixation_receptive = torch.zeros(num_ratios, num_trials)
+    fixation_projective = torch.zeros(num_ratios, num_trials)
     psychometric_intrinsic = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
     psychometric_receptive = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
     psychometric_projective = torch.zeros(num_ratios, num_trials, len(psychometric_edges) - 1)
 
     for i, perturb_ratio in enumerate(tqdm(perturb_ratios)):
-        loss_intrinsic[i], psychometric_intrinsic[i] = test_and_perturb(
+        c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
             net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
         )
-        loss_receptive[i], psychometric_receptive[i] = test_and_perturb(
+        loss_intrinsic[i] = c_loss
+        accuracy_intrinsic[i] = c_acc
+        evidence_intrinsic[i] = c_ev
+        fixation_intrinsic[i] = c_fix
+        psychometric_intrinsic[i] = c_psy
+
+        c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
             net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials
         )
-        loss_projective[i], psychometric_projective[i] = test_and_perturb(
+        loss_receptive[i] = c_loss
+        accuracy_receptive[i] = c_acc
+        evidence_receptive[i] = c_ev
+        fixation_receptive[i] = c_fix
+        psychometric_receptive[i] = c_psy
+
+        c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
             net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials
         )
+        loss_projective[i] = c_loss
+        accuracy_projective[i] = c_acc
+        evidence_projective[i] = c_ev
+        fixation_projective[i] = c_fix
+        psychometric_projective[i] = c_psy
 
     results = dict(
         jobid=jobid,
@@ -232,6 +263,15 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         loss_intrinsic=loss_intrinsic,
         loss_receptive=loss_receptive,
         loss_projective=loss_projective,
+        accuracy_intrinsic=accuracy_intrinsic,
+        accuracy_receptive=accuracy_receptive,
+        accuracy_projective=accuracy_projective,
+        evidence_intrinsic=evidence_intrinsic,
+        evidence_receptive=evidence_receptive,
+        evidence_projective=evidence_projective,
+        fixation_intrinsic=fixation_intrinsic,
+        fixation_receptive=fixation_receptive,
+        fixation_projective=fixation_projective,
         psychometric_edges=psychometric_edges,
         psychometric_intrinsic=psychometric_intrinsic,
         psychometric_receptive=psychometric_receptive,
@@ -269,6 +309,18 @@ if __name__ == "__main__":
     loss_receptive = torch.zeros(num_models, num_ratios, num_trials)
     loss_projective = torch.zeros(num_models, num_ratios, num_trials)
 
+    accuracy_intrinsic = torch.zeros(num_models, num_ratios, num_trials)
+    accuracy_receptive = torch.zeros(num_models, num_ratios, num_trials)
+    accuracy_projective = torch.zeros(num_models, num_ratios, num_trials)
+
+    evidence_intrinsic = torch.zeros(num_models, num_ratios, num_trials)
+    evidence_receptive = torch.zeros(num_models, num_ratios, num_trials)
+    evidence_projective = torch.zeros(num_models, num_ratios, num_trials)
+
+    fixation_intrinsic = torch.zeros(num_models, num_ratios, num_trials)
+    fixation_receptive = torch.zeros(num_models, num_ratios, num_trials)
+    fixation_projective = torch.zeros(num_models, num_ratios, num_trials)
+
     psychometric_edges = create_cdf_proportional_bins(20, std_dev=1, range_multiplier=2)
     psychometric_intrinsic = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
     psychometric_receptive = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
@@ -279,6 +331,15 @@ if __name__ == "__main__":
         loss_intrinsic[i] = results["loss_intrinsic"]
         loss_receptive[i] = results["loss_receptive"]
         loss_projective[i] = results["loss_projective"]
+        accuracy_intrinsic[i] = results["accuracy_intrinsic"]
+        accuracy_receptive[i] = results["accuracy_receptive"]
+        accuracy_projective[i] = results["accuracy_projective"]
+        evidence_intrinsic[i] = results["evidence_intrinsic"]
+        evidence_receptive[i] = results["evidence_receptive"]
+        evidence_projective[i] = results["evidence_projective"]
+        fixation_intrinsic[i] = results["fixation_intrinsic"]
+        fixation_receptive[i] = results["fixation_receptive"]
+        fixation_projective[i] = results["fixation_projective"]
         psychometric_intrinsic[i] = torch.mean(results["psychometric_intrinsic"], dim=1)
         psychometric_receptive[i] = torch.mean(results["psychometric_receptive"], dim=1)
         psychometric_projective[i] = torch.mean(results["psychometric_projective"], dim=1)
@@ -292,6 +353,15 @@ if __name__ == "__main__":
             loss_intrinsic=loss_intrinsic[:i],
             loss_receptive=loss_receptive[:i],
             loss_projective=loss_projective[:i],
+            accuracy_intrinsic=accuracy_intrinsic[:i],
+            accuracy_receptive=accuracy_receptive[:i],
+            accuracy_projective=accuracy_projective[:i],
+            evidence_intrinsic=evidence_intrinsic[:i],
+            evidence_receptive=evidence_receptive[:i],
+            evidence_projective=evidence_projective[:i],
+            fixation_intrinsic=fixation_intrinsic[:i],
+            fixation_receptive=fixation_receptive[:i],
+            fixation_projective=fixation_projective[:i],
             psychometric_intrinsic=psychometric_intrinsic[:i],
             psychometric_receptive=psychometric_receptive[:i],
             psychometric_projective=psychometric_projective[:i],

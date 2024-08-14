@@ -138,10 +138,13 @@ if __name__ == "__main__":
             optimizer.step()
 
             choice, evidence, fixation = task.analyze_response(outputs)
+            choice_evidence = evidence[:, 1] - evidence[:, 0]
+            choice_evidence[params["labels"] == 0] *= -1
+
             train_loss[epoch] = loss.item()
-            train_accuracy[epoch] = torch.sum(choice == params["labels"]) / B
-            train_evidence[epoch] = evidence[:, 1] - evidence[:, 0]
-            train_fixation[epoch] = fixation
+            train_accuracy[epoch] = torch.sum(choice == params["labels"]) / choice.size(0)
+            train_evidence[epoch] = torch.mean(choice_evidence)
+            train_fixation[epoch] = torch.mean(fixation)
 
             if (epoch + 1) % max(num_epochs // 100, 1) == 0:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
