@@ -33,6 +33,7 @@ def set_directory():
 def get_args():
     parser = ArgumentParser(description="Intrinsic excitability")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--network_type", type=str, default="Gain")
     parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=512)
@@ -99,7 +100,13 @@ if __name__ == "__main__":
 
     for imodel in range(num_models):
         # Create network
-        net = models.GainRNN(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
+        if args.network_type == "Gain":
+            model_constructor = models.GainRNN
+        elif args.network_type == "Tau":
+            model_constructor = models.TauRNN
+        else:
+            raise ValueError(f"Unknown network type: {args.network_type}")
+        net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
         net = net.to(device)
 
         optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
@@ -128,7 +135,7 @@ if __name__ == "__main__":
 
             if (epoch + 1) % max(num_epochs // 100, 1) == 0:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
-        
+
         # Save the results
         results = dict(
             args=vars(args),
