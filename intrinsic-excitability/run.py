@@ -109,11 +109,17 @@ if __name__ == "__main__":
         net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
         net = net.to(device)
 
+        # Save initial model
+        torch.save(net.state_dict(), directory / f"init_model_{imodel}.pt")
+
         optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 3, gamma=0.3)
 
         train_loss = torch.zeros(num_epochs)
+        train_accuracy = torch.zeros(num_epochs)
+        train_evidence = torch.zeros(num_epochs)
+        train_fixation = torch.zeros(num_epochs)
 
         # Training loop
         for epoch in range(num_epochs):
@@ -131,7 +137,11 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
+            choice, evidence, fixation = task.analyze_response(outputs)
             train_loss[epoch] = loss.item()
+            train_accuracy[epoch] = torch.sum(choice == params["labels"]) / B
+            train_evidence[epoch] = evidence[:, 1] - evidence[:, 0]
+            train_fixation[epoch] = fixation
 
             if (epoch + 1) % max(num_epochs // 100, 1) == 0:
                 print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
@@ -141,6 +151,9 @@ if __name__ == "__main__":
             args=vars(args),
             task=vars(task),
             train_loss=train_loss,
+            train_accuracy=train_accuracy,
+            train_evidence=train_evidence,
+            train_fixation=train_fixation,
         )
         torch.save(results, directory / f"results_{imodel}.pt")
 
