@@ -176,7 +176,14 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
     )
     task.cursors = task_params["cursors"]
 
-    net = models.GainRNN(
+    if args["network_type"] == "Gain":
+        model_constructor = models.GainRNN
+    elif args["network_type"] == "Tau":
+        model_constructor = models.TauRNN
+    else:
+        raise ValueError(f"Did not recognize network type -- {args['network_type']}")
+    
+    net = model_constructor(
         task.input_dimensionality(),
         args["num_neurons"],
         task.output_dimensionality(),
