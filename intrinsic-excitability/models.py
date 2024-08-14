@@ -13,8 +13,8 @@ class RNN(nn.Module, ABC):
         self.recurrent_rank = recurrent_rank
 
         # Input layer
-        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / hidden_dim)
-        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)) / hidden_dim)
+        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)))
+        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)))
 
         # Recurrent layer intrinsic properties
         self.set_recurrent_intrinsic()
@@ -71,12 +71,12 @@ class RNN(nn.Module, ABC):
 class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
         self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim))
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * torch.relu(x - self.hidden_threshold)
+        return self.hidden_gain * torch.relu(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -86,12 +86,12 @@ class GainRNN(RNN):
 class TauRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
         self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * torch.relu(x)
+        return self.hidden_gain * torch.relu(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""

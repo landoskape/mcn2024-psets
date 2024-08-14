@@ -147,7 +147,9 @@ if __name__ == "__main__":
             train_fixation[epoch] = torch.mean(fixation)
 
             if (epoch + 1) % max(num_epochs // 100, 1) == 0:
-                print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
+                print(
+                    f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}, Accuracy: {train_accuracy[epoch]:.4f}, Evidence: {train_evidence[epoch]:.4f}, Fixation: {train_fixation[epoch]:.4f}"
+                )
 
         # Save the results
         results = dict(
