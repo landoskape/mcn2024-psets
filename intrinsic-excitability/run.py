@@ -37,7 +37,7 @@ def get_args():
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=50)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
-    parser.add_argument("--num_epochs", type=int, default=3000)
+    parser.add_argument("--num_epochs", type=int, default=30)
     parser.add_argument("--start_sigma", type=float, default=0.1)
     parser.add_argument("--end_sigma", type=float, default=0.5)
     parser.add_argument("--start_delay", type=int, default=1)
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     recurrent_rank = args.recurrent_rank
 
     start_sigma = args.start_sigma
-    end_sigma = args.end_sigma    
+    end_sigma = args.end_sigma
     sigma = torch.cat(
         (start_sigma * torch.ones(num_epochs // 3), torch.linspace(start_sigma, end_sigma, num_epochs // 3), end_sigma * torch.ones(num_epochs // 3))
     )
@@ -85,6 +85,8 @@ if __name__ == "__main__":
 
     loss_function = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 30, gamma=0.3)
 
     train_loss = torch.zeros(num_epochs)
 
