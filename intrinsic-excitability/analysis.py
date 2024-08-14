@@ -143,7 +143,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         elif perturb_target == "projective":
             pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
 
-        X, target, params = task.generate_data(100, source_floor=0.1)
+        X, target, params = task.generate_data(100, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
 
         s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
