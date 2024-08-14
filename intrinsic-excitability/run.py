@@ -142,7 +142,7 @@ if __name__ == "__main__":
             choice_evidence[params["labels"] == 0] *= -1
 
             train_loss[epoch] = loss.item()
-            train_accuracy[epoch] = torch.sum(choice == params["labels"]) / choice.size(0)
+            train_accuracy[epoch] = torch.sum(choice == params["labels"].to(device)) / choice.size(0)
             train_evidence[epoch] = torch.mean(choice_evidence)
             train_fixation[epoch] = torch.mean(fixation)
 
