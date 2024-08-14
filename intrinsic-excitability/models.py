@@ -71,12 +71,12 @@ class RNN(nn.Module, ABC):
 class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
         self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim))
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return self.hidden_gain * torch.relu(x - self.hidden_threshold)
+        return torch.exp(self.hidden_gain) * torch.relu(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -86,12 +86,12 @@ class GainRNN(RNN):
 class TauRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
         self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return self.hidden_gain * torch.relu(x)
+        return torch.exp(self.hidden_gain) * torch.relu(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""

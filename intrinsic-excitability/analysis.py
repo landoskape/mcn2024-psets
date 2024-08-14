@@ -126,11 +126,15 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         raise ValueError(f"Unknown perturb target: {perturb_target}, recognized: 'intrinsic', 'receptive', 'projective'")
 
     loss = torch.zeros(num_trials)
+    accuracy = torch.zeros(num_trials)
+    evidence = torch.zeros(num_trials)
+    fixation = torch.zeros(num_trials)
     psychometric = torch.zeros(num_trials, len(psychometric_edges) - 1)
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
     for trial in progress:
         if perturb_target == "intrinsic":
-            pnet.hidden_gain.data = _update_parameter(base_hidden_gain, perturb_ratio)
+            new_gain = _update_parameter(torch.exp(base_hidden_gain), perturb_ratio)
+            pnet.hidden_gain.data = torch.log(new_gain)
             if learning_tau:
                 # the tau must be positive so it's passed through an exponential.
                 # we want the perturb_ratio to be accurate post-exponential -- so need to wrangle a bit
@@ -143,19 +147,22 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         elif perturb_target == "projective":
             pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
 
-        X, target, params = task.generate_data(100, source_floor=0.0)
+        X, target, params = task.generate_data(512, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
 
         s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
-        choice = measure_choice(task, outputs)[0]
+        choice, evidence, fixation = task.analyze_response(outputs)
         s_index = torch.bucketize(s_target, psychometric_edges)
         for i in range(len(psychometric_edges) - 1):
             if torch.sum(s_index == i) > 0:
                 psychometric[trial, i] = torch.mean(choice[s_index == i].float())
 
         loss[trial] = nn.MSELoss(reduction="sum")(outputs, target.to(device)).item()
+        accuracy[trial] = torch.sum(choice == params["labels"]) / choice.size(0)
+        evidence[trial] = evidence[:, 1] - evidence[:, 0]
+        fixation[trial] = fixation
 
-    return loss, psychometric
+    return loss, accuracy, evidence, fixation, psychometric
 
 
 def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges):
