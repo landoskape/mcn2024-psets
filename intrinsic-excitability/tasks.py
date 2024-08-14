@@ -88,7 +88,7 @@ class GoNogo(Task):
 
 
 class ContextualGoNogo(Task):
-    def __init__(self, D, sigma, num_contexts=2, stim_time=50, delay_time=10, decision_time=10):
+    def __init__(self, D, sigma, num_contexts=2, stim_time=40, delay_time=10, decision_time=10):
         self.D = D
         self.num_contexts = num_contexts
         self.stim_time = stim_time
