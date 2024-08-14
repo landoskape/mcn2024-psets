@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from copy import deepcopy
 from tqdm import tqdm
 from pathlib import Path
@@ -212,16 +213,26 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
 
 
 if __name__ == "__main__":
-    jobid = 7
+    parser = ArgumentParser(description="Perturbation analysis")
+    parser.add_argument("--jobid", type=int, help="Job ID", default=7)
+    parser.add_argument("--suffix", type=str, help="Suffix for model and results files", default="")
+    parser.add_argument("--num_trials", type=int, help="Number of trials", default=100)
+    parser.add_argument("--num_ratios", type=int, help="Number of perturbation ratios", default=11)
+    args = parser.parse_args()
+
+    jobid = args.jobid
+    suffix = args.suffix
+    if suffix != "" and suffix[0] != "_":
+        suffix = f"_{suffix}"
     directory = filepath / f"{jobid}"
 
     # Get all models (from the directory, of the form f"model_{i}.pt")
     model_indices = sorted([int(f.stem.split("_")[-1]) for f in directory.glob("model_*.pt")])
 
     # Set up perturbation analyses
-    perturb_ratios = torch.linspace(0, 1, 11)
+    perturb_ratios = torch.linspace(0, 1, args.num_ratios)
     num_ratios = len(perturb_ratios)
-    num_trials = 100
+    num_trials = args.num_trials
 
     num_models = len(model_indices)
 
@@ -257,4 +268,4 @@ if __name__ == "__main__":
             psychometric_projective=psychometric_projective[:i],
         )
 
-        torch.save(results, directory / "perturb_results.pt")
+        torch.save(results, directory / f"perturb_results{suffix}.pt")
