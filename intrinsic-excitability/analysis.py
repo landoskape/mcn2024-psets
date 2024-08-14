@@ -243,17 +243,18 @@ if __name__ == "__main__":
         psychometric_receptive[i] = torch.mean(results["psychometric_receptive"], dim=2)
         psychometric_projective[i] = torch.mean(results["psychometric_projective"], dim=2)
 
-    results = dict(
-        jobid=jobid,
-        model_indices=model_indices,
-        perturb_ratios=perturb_ratios,
-        loss_intrinsic=loss_intrinsic,
-        loss_receptive=loss_receptive,
-        loss_projective=loss_projective,
-        psychometric_edges=psychometric_edges,
-        psychometric_intrinsic=psychometric_intrinsic,
-        psychometric_receptive=psychometric_receptive,
-        psychometric_projective=psychometric_projective,
-    )
+        # Save results every time it's finished so if the timeout happens we still have results...
+        results = dict(
+            jobid=jobid,
+            model_indices=model_indices[:i],
+            perturb_ratios=perturb_ratios,
+            loss_intrinsic=loss_intrinsic[:i],
+            loss_receptive=loss_receptive[:i],
+            loss_projective=loss_projective[:i],
+            psychometric_edges=psychometric_edges,
+            psychometric_intrinsic=psychometric_intrinsic[:i],
+            psychometric_receptive=psychometric_receptive[:i],
+            psychometric_projective=psychometric_projective[:i],
+        )
 
-    torch.save(results, directory / "perturb_results.pt")
+        torch.save(results, directory / "perturb_results.pt")
