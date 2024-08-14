@@ -87,7 +87,7 @@ class TauRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
         self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
-        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
     def activation(self, x):
         """required for setting the relevant activation function"""
