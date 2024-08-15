@@ -50,6 +50,8 @@ def get_args():
     parser.add_argument("--num_models", type=int, default=1)
     parser.add_argument("--no_recurrent_learning", default=False, action="store_true")
     parser.add_argument("--no_intrinsic_learning", default=False, action="store_true")
+    parser.add_argument("--no_input_learning", default=False, action="store_true")
+    parser.add_argument("--no_readout_learning", default=False, action="store_true")
     return parser.parse_args()
 
 
@@ -106,19 +108,42 @@ if __name__ == "__main__":
             model_constructor = models.GainRNN
         elif args.network_type == "Tau":
             model_constructor = models.TauRNN
+        elif args.network_type == "Full":
+            model_constructor = models.FullRNN
         else:
             raise ValueError(f"Unknown network type: {args.network_type}")
-        net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
+        
+        if args.network_type != "Full":
+            kwargs = dict(
+                input_rank=input_rank,
+                recurrent_rank=recurrent_rank,
+            )
+        else:
+            kwargs = {}
+            
+        net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), **kwargs)
         net = net.to(device)
 
+        if args.no_input_learning:
+            turn_off = ["input_weights", "input_receptive", "input_projective"]
+            for name, prm in net.named_parameters():
+                if name in turn_off:
+                    prm.requires_grad = False
+
         if args.no_recurrent_learning:
-            turn_off = ["reccurent_receptive", "reccurent_projective"]
+            turn_off = ["recurrent_weights", "reccurent_receptive", "reccurent_projective"]
             for name, prm in net.named_parameters():
                 if name in turn_off:
                     prm.requires_grad = False
 
         if args.no_intrinsic_learning:
             turn_off = ["hidden_gain", "hidden_threshold", "hidden_tau"]
+            for name, prm in net.named_parameters():
+                if name in turn_off:
+                    prm.requires_grad = False
+
+        if args.no_readout_learning:
+            turn_off = ["readout"]
             for name, prm in net.named_parameters():
                 if name in turn_off:
                     prm.requires_grad = False

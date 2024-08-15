@@ -4,6 +4,59 @@ from torch import nn
 from math import sqrt
 
 
+class FullRNN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1):
+        super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.alpha = alpha
+
+        # Input layer
+        self.input_weights = torch.nn.Parameter(torch.randn((hidden_dim, input_dim)) / sqrt(hidden_dim) / sqrt(input_dim))
+
+        # Recurrent layer intrinsic properties
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim))
+
+        # Recurrent layer connections
+        self.recurrent_weights = torch.nn.Parameter(torch.randn((hidden_dim, hidden_dim)) / hidden_dim)
+        
+        # Readout layer
+        self.readout = nn.Linear(hidden_dim, output_dim)
+
+    def activation(self, x):
+        """required for setting the relevant activation function"""
+        return torch.exp(self.hidden_gain) * torch.relu(x)
+
+    def update_hidden(self, h, dh):
+        """required for updating the hidden state"""
+        return h + dh * self.alpha * self.hidden_tau
+    
+    def forward(self, x, return_hidden=False):
+        # Initialize hidden states and outputs
+        batch_size = x.size(0)
+        seq_length = x.size(1)
+        if return_hidden:
+            hidden = torch.zeros((batch_size, seq_length, self.hidden_dim), device=x.device)
+        out = torch.zeros((batch_size, seq_length, self.output_dim), device=x.device)
+
+        # Recurrent loop
+        h = torch.zeros((batch_size, self.hidden_dim), device=x.device)
+        for step in range(seq_length):
+            x_in = (self.input_weights @ x[:, step].T).T
+            r_in = (self.recurrent_weights @ h.T).T
+            dh = -h + self.activation(r_in + x_in)
+            h = self.update_hidden(h, dh)
+            if return_hidden:
+                hidden[:, step] = h
+            out[:, step] = self.readout(h)
+
+        if return_hidden:
+            return out, hidden
+        return out
+
+
 class RNN(nn.Module, ABC):
     def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1, alpha=0.1):
         super().__init__()
@@ -68,7 +121,6 @@ class RNN(nn.Module, ABC):
         if return_hidden:
             return out, hidden
         return out
-
 
 class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
