@@ -6,7 +6,6 @@ import socket
 import getpass
 
 import numpy as np
-from scipy.optimize import curve_fit
 import torch
 import torch.nn as nn
 
@@ -93,30 +92,30 @@ def measure_choice(task, output):
     return choice, evidence
 
 
-def sigmoid(x, L, x0, k, b):
-    """
-    Sigmoid function
-    L: the curve's maximum value
-    x0: the x-value of the sigmoid's midpoint
-    k: the steepness of the curve
-    b: the y-axis intercept
-    """
-    return L / (1 + np.exp(-k * (x - x0))) + b
+# def sigmoid(x, L, x0, k, b):
+#     """
+#     Sigmoid function
+#     L: the curve's maximum value
+#     x0: the x-value of the sigmoid's midpoint
+#     k: the steepness of the curve
+#     b: the y-axis intercept
+#     """
+#     return L / (1 + np.exp(-k * (x - x0))) + b
 
 
-def fit_sigmoid(s, p):
-    """
-    Fit sigmoid function to data using curve_fit
-    s: stimulus values
-    p: proportion values
-    """
-    # Initial parameter guesses
-    p0 = [max(p), np.median(s), 1, min(p)]
+# def fit_sigmoid(s, p):
+#     """
+#     Fit sigmoid function to data using curve_fit
+#     s: stimulus values
+#     p: proportion values
+#     """
+#     # Initial parameter guesses
+#     p0 = [max(p), np.median(s), 1, min(p)]
 
-    # Fit the function
-    popt, _ = curve_fit(sigmoid, s, p, p0, method="lm")
+#     # Fit the function
+#     popt, _ = curve_fit(sigmoid, s, p, p0, method="lm")
 
-    return popt
+#     return popt
 
 
 @torch.no_grad()
@@ -145,6 +144,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
     loss = torch.zeros(num_trials)
     accuracy = torch.zeros(num_trials)
     evidence = torch.zeros(num_trials)
+    print("from test and perturb", evidence.shape)
     fixation = torch.zeros(num_trials)
     psychometric = torch.zeros(num_trials, len(psychometric_edges) - 1)
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
@@ -167,8 +167,8 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         X, target, params = task.generate_data(512, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
 
-        choice, evidence, fixation = task.analyze_response(outputs)
-        choice_evidence = evidence[:, 1] - evidence[:, 0]
+        choice, c_evidence, c_fixation = task.analyze_response(outputs)
+        choice_evidence = c_evidence[:, 1] - c_evidence[:, 0]
         choice_evidence[params["labels"] == 0] *= -1
 
         s_target = torch.gather(params["s_empirical"], 1, params["context_idx"].unsqueeze(1)).squeeze(1)
@@ -180,8 +180,9 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         loss[trial] = nn.MSELoss(reduction="sum")(outputs, target.to(device)).item()
         accuracy[trial] = torch.sum(choice == params["labels"].to(device)) / choice.size(0)
         evidence[trial] = torch.mean(choice_evidence)
-        fixation[trial] = torch.mean(fixation)
+        fixation[trial] = torch.mean(c_fixation)
 
+    print("from test and perturb (end)", evidence.shape)
     return loss, accuracy, evidence, fixation, psychometric
 
 
@@ -246,6 +247,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
             net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
         )
+        print("HIIIIII", c_ev.shape, evidence_intrinsic.shape)
         loss_intrinsic[i] = c_loss
         accuracy_intrinsic[i] = c_acc
         evidence_intrinsic[i] = c_ev
