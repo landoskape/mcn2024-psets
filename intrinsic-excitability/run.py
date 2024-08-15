@@ -48,6 +48,7 @@ def get_args():
     parser.add_argument("--input_rank", type=int, default=3)
     parser.add_argument("--recurrent_rank", type=int, default=2)
     parser.add_argument("--num_models", type=int, default=1)
+    parser.add_argument("--no_recurrent_learning", default=False, action="store_true")
     return parser.parse_args()
 
 
@@ -109,10 +110,16 @@ if __name__ == "__main__":
         net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), input_rank=input_rank, recurrent_rank=recurrent_rank)
         net = net.to(device)
 
+        if args.no_recurrent_learning:
+            turn_off = ["reccurent_receptive", "reccurent_projective"]
+            for name, prm in net.named_parameters():
+                if name in turn_off:
+                    prm.requires_grad = False
+
         # Save initial model
         torch.save(net.state_dict(), directory / f"init_model_{imodel}.pt")
 
-        optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+        optimizer = torch.optim.Adam(filter(lambda x: x.requires_grad, net.parameters()), lr=learning_rate)
 
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=num_epochs // 3, gamma=0.3)
 

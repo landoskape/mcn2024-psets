@@ -1,27 +1,29 @@
 from abc import ABC, abstractmethod
 import torch
 from torch import nn
+from math import sqrt
 
 
 class RNN(nn.Module, ABC):
-    def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1):
+    def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1, alpha=0.1):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.input_rank = input_rank
         self.recurrent_rank = recurrent_rank
+        self.alpha = alpha
 
         # Input layer
-        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)))
-        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)))
+        self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / sqrt(hidden_dim))
+        self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)) / sqrt(input_dim))
 
         # Recurrent layer intrinsic properties
         self.set_recurrent_intrinsic()
 
         # Recurrent layer connections
-        self.reccurent_projective = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / hidden_dim)
-        self.reccurent_receptive = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / hidden_dim)
+        self.reccurent_projective = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / sqrt(hidden_dim))
+        self.reccurent_receptive = torch.nn.Parameter(torch.randn((hidden_dim, recurrent_rank)) / sqrt(hidden_dim))
 
         # Readout layer
         self.readout = nn.Linear(hidden_dim, output_dim)
@@ -71,28 +73,28 @@ class RNN(nn.Module, ABC):
 class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
         self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim))
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return self.hidden_gain * torch.relu(x - self.hidden_threshold)
+        return torch.exp(self.hidden_gain) * torch.relu(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
-        return h + dh
+        return h + dh * self.alpha
 
 
 class TauRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
-        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
         self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return self.hidden_gain * torch.relu(x)
+        return torch.exp(self.hidden_gain) * torch.relu(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
-        return h + dh * torch.exp(self.hidden_tau)
+        return h + dh * torch.exp(self.hidden_tau) * self.alpha

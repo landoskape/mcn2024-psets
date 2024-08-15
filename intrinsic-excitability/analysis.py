@@ -178,7 +178,7 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
                 psychometric[trial, i] = torch.mean(choice[s_index == i].float())
 
         loss[trial] = nn.MSELoss(reduction="sum")(outputs, target.to(device)).item()
-        accuracy[trial] = torch.sum(choice == params["labels"]) / choice.size(0)
+        accuracy[trial] = torch.sum(choice == params["labels"].to(device)) / choice.size(0)
         evidence[trial] = torch.mean(choice_evidence)
         fixation[trial] = torch.mean(fixation)
 
