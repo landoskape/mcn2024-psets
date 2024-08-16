@@ -100,20 +100,22 @@ def rotate_by_angle(v, rad, epochs=1000, lr=0.1, atol=1e-6, rtol=1e-6):
     assert (rad >= 0) and (rad <= torch.pi / 2), "Rotation angle must be between 0 and pi/2"
     if rad == 0.0:
         return v.clone()
-    rad = torch.tensor(rad)
-    vprime = torch.randn_like(v)
-    vprime.requires_grad = True
-    for _ in range(epochs):
-        angles = measure_angle(vprime, v)
-        loss = torch.sum((angles - rad) ** 2)
-        loss.backward()
-        with torch.no_grad():
-            vprime -= lr * vprime.grad
-            vprime /= vprime.norm(dim=0)
-        vprime.grad.zero_()
-        if torch.allclose(angles, rad, atol=atol, rtol=rtol):
-            break
-    vprime = vprime / vprime.norm(dim=0) * v.norm(dim=0)
+    with torch.set_grad_enabled(True):
+        if type(rad) != torch.Tensor:
+            rad = torch.tensor(rad)
+        vprime = torch.randn_like(v)
+        vprime.requires_grad = True
+        for _ in range(epochs):
+            angles = measure_angle(vprime, v)
+            loss = torch.sum((angles - rad) ** 2)
+            loss.backward()
+            with torch.no_grad():
+                vprime -= lr * vprime.grad
+                vprime /= vprime.norm(dim=0)
+            vprime.grad.zero_()
+            if torch.allclose(angles, rad, atol=atol, rtol=rtol):
+                break
+        vprime = vprime / vprime.norm(dim=0) * v.norm(dim=0)
     return vprime.detach()
 
 
@@ -217,7 +219,7 @@ def test_and_perturb(
     return loss, accuracy, evidence, fixation, psychometric
 
 
-def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges):
+def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges, perturb_type):
     # Load trained model and results
     model, results = load_job(jobid, model_index=model_index)
 
@@ -232,6 +234,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         stim_time=task_params["stim_time"],
         delay_time=args["end_delay"],
         decision_time=task_params["decision_time"],
+        task_type=args["task_type"],
     )
     task.cursors = task_params["cursors"]
 
@@ -277,7 +280,13 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
 
     for i, perturb_ratio in enumerate(tqdm(perturb_ratios)):
         c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
-            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
+            net,
+            task,
+            psychometric_edges,
+            perturb_ratio=perturb_ratio,
+            perturb_target="intrinsic",
+            num_trials=num_trials,
+            perturb_type=perturb_type,
         )
         loss_intrinsic[i] = c_loss
         accuracy_intrinsic[i] = c_acc
@@ -286,7 +295,13 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         psychometric_intrinsic[i] = c_psy
 
         c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
-            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="receptive", num_trials=num_trials
+            net,
+            task,
+            psychometric_edges,
+            perturb_ratio=perturb_ratio,
+            perturb_target="receptive",
+            num_trials=num_trials,
+            perturb_type=perturb_type,
         )
         loss_receptive[i] = c_loss
         accuracy_receptive[i] = c_acc
@@ -295,7 +310,13 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         psychometric_receptive[i] = c_psy
 
         c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
-            net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="projective", num_trials=num_trials
+            net,
+            task,
+            psychometric_edges,
+            perturb_ratio=perturb_ratio,
+            perturb_target="projective",
+            num_trials=num_trials,
+            perturb_type=perturb_type,
         )
         loss_projective[i] = c_loss
         accuracy_projective[i] = c_acc
@@ -337,6 +358,7 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, help="Suffix for model and results files", default="")
     parser.add_argument("--num_trials", type=int, help="Number of trials", default=100)
     parser.add_argument("--num_ratios", type=int, help="Number of perturbation ratios", default=11)
+    parser.add_argument("--perturb_type", type=str, default="random")
     args = parser.parse_args()
 
     jobid = args.jobid
@@ -349,7 +371,14 @@ if __name__ == "__main__":
     model_indices = sorted([int(f.stem.split("_")[-1]) for f in directory.glob("model_*.pt")])
 
     # Set up perturbation analyses
-    perturb_ratios = torch.linspace(0, 1, args.num_ratios)
+    perturb_type = args.perturb_type
+    if perturb_type == "random":
+        perturb_ratios = torch.linspace(0, 1, args.num_ratios)
+    elif perturb_type == "rotation":
+        perturb_ratios = torch.linspace(0, torch.pi / 2, args.num_ratios)
+    else:
+        raise ValueError(f"Didn't recognize perturb type, received: {perturb_type}, allowed: ['random', 'rotation']")
+
     num_ratios = len(perturb_ratios)
     num_trials = args.num_trials
 
@@ -377,7 +406,7 @@ if __name__ == "__main__":
     psychometric_projective = torch.zeros(num_models, num_ratios, len(psychometric_edges) - 1)
 
     for i, model_index in enumerate(tqdm(model_indices)):
-        results = evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges)
+        results = evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_edges, perturb_type)
         loss_intrinsic[i] = results["loss_intrinsic"]
         loss_receptive[i] = results["loss_receptive"]
         loss_projective[i] = results["loss_projective"]
@@ -417,4 +446,4 @@ if __name__ == "__main__":
             psychometric_projective=psychometric_projective[:i],
         )
 
-        torch.save(results, directory / f"perturb_results{suffix}.pt")
+        torch.save(results, directory / f"perturb_results_{perturb_type}{suffix}.pt")
