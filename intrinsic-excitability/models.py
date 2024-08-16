@@ -27,7 +27,7 @@ class FullRNN(nn.Module):
 
         # Recurrent layer connections
         self.recurrent_weights = torch.nn.Parameter(torch.randn((hidden_dim, hidden_dim)) / hidden_dim)
-        
+
         # Readout layer
         self.readout = nn.Linear(hidden_dim, output_dim)
 
@@ -38,7 +38,7 @@ class FullRNN(nn.Module):
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
         return h + dh * self.alpha * self.hidden_tau
-    
+
     def forward(self, x, return_hidden=False):
         # Initialize hidden states and outputs
         batch_size = x.size(0)
@@ -78,7 +78,7 @@ class RNN(nn.Module, ABC):
             self.nlfun = torch.tanh
         else:
             raise ValueError(f"nlfun ({nlfun}) not recognized, permitted are: ['relu', 'tanh']")
-        
+
         # Input layer
         self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / sqrt(hidden_dim))
         self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)) / sqrt(input_dim))
@@ -133,6 +133,7 @@ class RNN(nn.Module, ABC):
         if return_hidden:
             return out, hidden
         return out
+
 
 class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
