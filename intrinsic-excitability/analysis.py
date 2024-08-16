@@ -153,9 +153,9 @@ def test_and_perturb(
         else:
             base_hidden_threshold = pnet.hidden_threshold.data.clone()
     elif perturb_target == "receptive" and not fullrnn:
-        base_reccurent_receptive = pnet.reccurent_receptive.data.clone()
+        base_recurrent_receptive = pnet.reccurent_receptive.data.clone()
     elif perturb_target == "projective" and not fullrnn:
-        base_reccurent_projective = pnet.reccurent_projective.data.clone()
+        base_recurrent_projective = pnet.reccurent_projective.data.clone()
     elif fullrnn:
         recurrent_weights = pnet.recurrent_weights.data.clone()
         base_recurrent_projective, base_recurrent_scale, base_recurrent_receptive = torch.linalg.svd(recurrent_weights)
@@ -163,9 +163,29 @@ def test_and_perturb(
         base_recurrent_background = base_recurrent_projective[:, 2:] @ base_recurrent_scale[2:][:, 2:] @ base_recurrent_receptive[2:]
         base_recurrent_projective = base_recurrent_projective[:, :2]
         base_recurrent_scale = base_recurrent_scale[:2][:, :2]
-        base_recurrent_receptive = base_recurrent_receptive[:2]
+        base_recurrent_receptive = base_recurrent_receptive[:2].T
     else:
         raise ValueError(f"Unknown perturb target: {perturb_target}, recognized: 'intrinsic', 'receptive', 'projective'")
+
+    if perturb_type == "rotation":
+        # Generate all the rotations across trials at once to avoid the overhead of autograd
+        if perturb_target == "intrinsic":
+            if learning_tau:
+                intrinsic_parameters = torch.stack((base_hidden_gain, base_hidden_tau), dim=1)
+            else:
+                intrinsic_parameters = torch.stack((base_hidden_gain, base_hidden_threshold), dim=1)
+            perturbed_parameters = _update_parameter(intrinsic_parameters.unsqueeze(2).expand(-1, -1, num_trials), perturb_ratio)
+            perturbed_gain = perturbed_parameters[:, 0]
+            if learning_tau:
+                perturbed_tau = perturbed_parameters[:, 1]
+            else:
+                perturbed_threshold = perturbed_parameters[:, 1]
+        elif perturb_target == "receptive":
+            perturbed_receptive = _update_parameter(base_recurrent_receptive.unsqueeze(2).expand(-1, -1, num_trials), perturb_ratio)
+        elif perturb_target == "projective":
+            perturbed_projective = _update_parameter(base_recurrent_projective.unsqueeze(2).expand(-1, -1, num_trials), perturb_ratio)
+        else:
+            raise ValueError("Unknown perturb target")
 
     loss = torch.zeros(num_trials)
     accuracy = torch.zeros(num_trials)
@@ -175,29 +195,45 @@ def test_and_perturb(
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
     for trial in progress:
         if perturb_target == "intrinsic":
-            new_gain = _update_parameter(torch.exp(base_hidden_gain), perturb_ratio)
+            if perturb_type == "random":
+                new_gain = _update_parameter(torch.exp(base_hidden_gain), perturb_ratio)
+            else:
+                new_gain = perturbed_gain[:, trial]
             pnet.hidden_gain.data = torch.log(new_gain)
             if learning_tau:
                 # the tau must be positive so it's passed through an exponential.
                 # we want the perturb_ratio to be accurate post-exponential -- so need to wrangle a bit
-                new_tau = _update_parameter(torch.exp(base_hidden_tau), perturb_ratio)
+                if perturb_type == "random":
+                    new_tau = _update_parameter(torch.exp(base_hidden_tau), perturb_ratio)
+                else:
+                    new_tau = perturbed_tau[:, trial]
                 pnet.hidden_tau.data = torch.log(new_tau)
             else:
-                pnet.hidden_threshold.data = _update_parameter(base_hidden_threshold, perturb_ratio)
+                if perturb_type == "random":
+                    new_threshold = _update_parameter(base_hidden_threshold, perturb_ratio)
+                else:
+                    new_threshold = perturbed_threshold[:, trial]
+                pnet.hidden_threshold.data = new_threshold
         elif perturb_target == "receptive":
             if fullrnn:
-                new_receptive = _update_parameter(base_recurrent_receptive, perturb_ratio)
+                if perturb_type == "random":
+                    new_receptive = _update_parameter(base_recurrent_receptive, perturb_ratio)
+                else:
+                    new_receptive = perturbed_receptive[:, :, trial]
                 new_combo = base_recurrent_projective @ base_recurrent_scale @ new_receptive
                 pnet.recurrent_weights.data = base_recurrent_background + new_combo
             else:
-                pnet.reccurent_receptive.data = _update_parameter(base_reccurent_receptive, perturb_ratio)
+                pnet.reccurent_receptive.data = _update_parameter(base_recurrent_receptive, perturb_ratio)
         elif perturb_target == "projective":
             if fullrnn:
-                new_projective = _update_parameter(base_recurrent_projective, perturb_ratio)
+                if perturb_type == "random":
+                    new_projective = _update_parameter(base_recurrent_projective, perturb_ratio)
+                else:
+                    new_projective = perturbed_projective[:, :, trial]
                 new_combo = new_projective @ base_recurrent_scale @ base_recurrent_receptive
                 pnet.recurrent_weights.data = base_recurrent_background + new_combo
             else:
-                pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
+                pnet.reccurent_projective.data = _update_parameter(base_recurrent_projective, perturb_ratio)
 
         X, target, params = task.generate_data(512, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
