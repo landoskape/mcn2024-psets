@@ -5,7 +5,7 @@ from math import sqrt
 
 
 class FullRNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="relu"):
+    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="relu", gainfun="sigmoid", taufun="sigmoid", tauscale=10):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -15,8 +15,25 @@ class FullRNN(nn.Module):
             self.nlfun = torch.relu
         elif nlfun == "tanh":
             self.nlfun = torch.tanh
+        elif nlfun == "linear":
+            self.nlfun = lambda x: x
         else:
             raise ValueError(f"nlfun ({nlfun}) not recognized, permitted are: ['relu', 'tanh']")
+
+        prmfun_dict = dict(
+            sigmoid=torch.sigmoid,
+            exp=torch.exp,
+            linear=lambda x: x,
+        )
+        if gainfun not in prmfun_dict:
+            raise ValueError(f"gainfun ({gainfun}) not recognized, permitted are: {list(prmfun_dict.keys())}")
+        self.gainfun = prmfun_dict[gainfun]
+        if taufun not in prmfun_dict:
+            raise ValueError(f"taufun ({taufun}) not recognized, permitted are: {list(prmfun_dict.keys())}")
+        self.taufun = prmfun_dict[taufun]
+        self.tauscale = tauscale
+
+        assert tauscale > 0, "tauscale must be positive"
 
         # Input layer
         self.input_weights = torch.nn.Parameter(torch.randn((hidden_dim, input_dim)) / sqrt(hidden_dim) / sqrt(input_dim))
@@ -33,11 +50,11 @@ class FullRNN(nn.Module):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * self.nlfun(x)
+        return self.gainfun(self.hidden_gain) * self.nlfun(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
-        return h + dh * self.alpha * self.hidden_tau
+        return h + dh * self.alpha * self.taufun(self.hidden_tau) * self.tauscale
 
     def forward(self, x, return_hidden=False):
         # Initialize hidden states and outputs
@@ -64,7 +81,19 @@ class FullRNN(nn.Module):
 
 
 class RNN(nn.Module, ABC):
-    def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1, alpha=0.1, nlfun="relu"):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        output_dim,
+        input_rank=1,
+        recurrent_rank=1,
+        alpha=0.1,
+        nlfun="relu",
+        gainfun="sigmoid",
+        taufun="sigmoid",
+        tauscale=10,
+    ):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -76,8 +105,25 @@ class RNN(nn.Module, ABC):
             self.nlfun = torch.relu
         elif nlfun == "tanh":
             self.nlfun = torch.tanh
+        elif nlfun == "linear":
+            self.nlfun = lambda x: x
         else:
             raise ValueError(f"nlfun ({nlfun}) not recognized, permitted are: ['relu', 'tanh']")
+
+        prmfun_dict = dict(
+            sigmoid=torch.sigmoid,
+            exp=torch.exp,
+            linear=lambda x: x,
+        )
+        if gainfun not in prmfun_dict:
+            raise ValueError(f"gainfun ({gainfun}) not recognized, permitted are: {list(prmfun_dict.keys())}")
+        self.gainfun = prmfun_dict[gainfun]
+        if taufun not in prmfun_dict:
+            raise ValueError(f"taufun ({taufun}) not recognized, permitted are: {list(prmfun_dict.keys())}")
+        self.taufun = prmfun_dict[taufun]
+        self.tauscale = tauscale
+
+        assert tauscale > 0, "tauscale must be positive"
 
         # Input layer
         self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / sqrt(hidden_dim))
@@ -143,7 +189,7 @@ class GainRNN(RNN):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * self.nlfun(x - self.hidden_threshold)
+        return self.gainfun(self.hidden_gain) * self.nlfun(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -158,8 +204,8 @@ class TauRNN(RNN):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * self.nlfun(x)
+        return self.gainfun(self.hidden_gain) * self.nlfun(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
-        return h + dh * torch.exp(self.hidden_tau) * self.alpha
+        return h + dh * self.taufun(self.hidden_tau) * self.alpha * self.tauscale
