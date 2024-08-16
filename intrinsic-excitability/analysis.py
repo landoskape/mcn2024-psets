@@ -171,9 +171,9 @@ def test_and_perturb(
         # Generate all the rotations across trials at once to avoid the overhead of autograd
         if perturb_target == "intrinsic":
             if learning_tau:
-                intrinsic_parameters = torch.stack((base_hidden_gain, base_hidden_tau), dim=1)
+                intrinsic_parameters = torch.stack((torch.exp(base_hidden_gain), torch.exp(base_hidden_tau)), dim=1)
             else:
-                intrinsic_parameters = torch.stack((base_hidden_gain, base_hidden_threshold), dim=1)
+                intrinsic_parameters = torch.stack((torch.exp(base_hidden_gain()), base_hidden_threshold), dim=1)
             perturbed_parameters = _update_parameter(intrinsic_parameters.unsqueeze(2).expand(-1, -1, num_trials), perturb_ratio)
             perturbed_gain = perturbed_parameters[:, 0]
             if learning_tau:
