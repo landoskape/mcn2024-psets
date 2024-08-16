@@ -89,19 +89,29 @@ class GoNogo(Task):
 
 
 class ContextualGoNogo(Task):
-    def __init__(self, D, sigma, num_contexts=2, stim_time=40, delay_time=10, decision_time=10):
-        self.D = D
+    def __init__(self, D, sigma, num_contexts=2, stim_time=40, delay_time=10, decision_time=10, task_type="embedded"):
+        if task_type=="embedded":
+            self.D = D
+        elif task_type=="privileged":
+            D = num_contexts
+            self.D = num_contexts
+        else:
+            raise ValueError(f"Didn't recognize task type, received={task_type}, permitted=['embedded', 'privileged']")
+        
         self.num_contexts = num_contexts
         self.stim_time = stim_time
         self.delay_time = delay_time
         self.decision_time = decision_time
         self.sigma = sigma
 
-        assert self.num_contexts > 1, "Number of contexts must be greater than 1"
-        assert self.num_contexts < self.D, "Number of contexts must be less than the dimensionality"
+        assert self.num_contexts >= 1, "Number of contexts must be greater than or equal to 1"
+        assert self.num_contexts <= self.D, "Number of contexts must be less than the dimensionality"
 
-        # Generate a random set of orthogonal "cursor" vectors
-        self.cursors = torch.linalg.qr(torch.randn(self.D, self.D)).Q[:, : self.num_contexts].T
+        if task_type == "embedded":
+            # Generate a random set of orthogonal "cursor" vectors
+            self.cursors = torch.linalg.qr(torch.randn(self.D, self.D)).Q[:, : self.num_contexts].T
+        else:
+            self.cursors = torch.eye(self.D)
 
     def _generate_source(self, B, source_strength, source_floor):
         """Generate a random source strength for each batch element with a floor"""

@@ -33,7 +33,8 @@ def set_directory():
 def get_args():
     parser = ArgumentParser(description="Intrinsic excitability")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--network_type", type=str, default="Gain")
+    parser.add_argument("--network_type", type=str, default="Tau")
+    parser.add_argument("--task_type", type=str, default="privileged")
     parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=512)
@@ -47,6 +48,7 @@ def get_args():
     parser.add_argument("--end_source_floor", type=float, default=0.5)
     parser.add_argument("--input_rank", type=int, default=3)
     parser.add_argument("--recurrent_rank", type=int, default=2)
+    parser.add_argument("--nlfun", type=str, default="relu")
     parser.add_argument("--num_models", type=int, default=1)
     parser.add_argument("--no_recurrent_learning", default=False, action="store_true")
     parser.add_argument("--no_intrinsic_learning", default=False, action="store_true")
@@ -99,7 +101,11 @@ if __name__ == "__main__":
         )
     )
 
-    task = tasks.ContextualGoNogo(D, sigma, delay_time=1, num_contexts=2)
+    if args.task_type == "embedded":
+        D = 2
+        args.input_dimensions = 2
+    
+    task = tasks.ContextualGoNogo(D, sigma, delay_time=1, num_contexts=2, task_type=args.task_type)
     loss_function = nn.MSELoss()
 
     for imodel in range(num_models):
