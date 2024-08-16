@@ -89,7 +89,7 @@ class GoNogo(Task):
 
 
 class ContextualGoNogo(Task):
-    def __init__(self, D, sigma, num_contexts=2, stim_time=40, delay_time=10, decision_time=10, task_type="embedded"):
+    def __init__(self, D, sigma, num_contexts=2, stim_time=20, delay_time=10, decision_time=10, task_type="embedded"):
         if task_type == "embedded":
             self.D = D
         elif task_type == "privileged":

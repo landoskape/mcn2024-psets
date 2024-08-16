@@ -42,8 +42,9 @@ def get_args():
     parser.add_argument("--num_epochs", type=int, default=3000)
     parser.add_argument("--start_sigma", type=float, default=0.1)
     parser.add_argument("--end_sigma", type=float, default=0.1)
-    parser.add_argument("--start_delay", type=int, default=1)
-    parser.add_argument("--end_delay", type=int, default=5)
+    parser.add_argument("--stim_time", type=int, default=20)
+    parser.add_argument("--start_delay", type=int, default=5)
+    parser.add_argument("--end_delay", type=int, default=50)
     parser.add_argument("--start_source_floor", type=float, default=0.5)
     parser.add_argument("--end_source_floor", type=float, default=0.5)
     parser.add_argument("--input_rank", type=int, default=3)
@@ -105,7 +106,7 @@ if __name__ == "__main__":
         D = 2
         args.input_dimensions = 2
     
-    task = tasks.ContextualGoNogo(D, sigma, delay_time=1, num_contexts=2, task_type=args.task_type)
+    task = tasks.ContextualGoNogo(D, sigma, stim_time=args.stim_time, delay_time=args.end_delay, num_contexts=2, task_type=args.task_type)
     loss_function = nn.MSELoss()
 
     for imodel in range(num_models):
