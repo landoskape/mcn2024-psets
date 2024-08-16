@@ -129,11 +129,13 @@ class ContextualGoNogo(Task):
     def sequence_length(self):
         return self.stim_time + self.delay_time + self.decision_time
 
-    def analyze_response(self, output):
+    def analyze_response(self, output, delay_time=None):
+        # Use the desired delay time if provided, otherwise use the default
+        delay_time = delay_time or self.delay_time
         # Measure choice, measure evidence
         choice, evidence = measure_choice(self, output)
         # Measure fixation error (ability to hold fixation before decision time)
-        fixation = torch.sum(output[:, : self.stim_time + self.delay_time] ** 2, dim=(1, 2))
+        fixation = torch.sum(output[:, : self.stim_time + delay_time] ** 2, dim=(1, 2))
         return choice, evidence, fixation
 
     def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0):

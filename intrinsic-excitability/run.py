@@ -105,7 +105,7 @@ if __name__ == "__main__":
     if args.task_type == "embedded":
         D = 2
         args.input_dimensions = 2
-    
+
     task = tasks.ContextualGoNogo(D, sigma, stim_time=args.stim_time, delay_time=args.end_delay, num_contexts=2, task_type=args.task_type)
     loss_function = nn.MSELoss()
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             model_constructor = models.FullRNN
         else:
             raise ValueError(f"Unknown network type: {args.network_type}")
-        
+
         if args.network_type != "Full":
             kwargs = dict(
                 input_rank=input_rank,
@@ -127,7 +127,7 @@ if __name__ == "__main__":
             )
         else:
             kwargs = {}
-            
+
         net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), **kwargs)
         net = net.to(device)
 
@@ -183,7 +183,7 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
-            choice, evidence, fixation = task.analyze_response(outputs)
+            choice, evidence, fixation = task.analyze_response(outputs, delay_time=delay_time[epoch])
             choice_evidence = evidence[:, 1] - evidence[:, 0]
             choice_evidence[params["labels"] == 0] *= -1
 
