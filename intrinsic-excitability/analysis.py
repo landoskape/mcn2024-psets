@@ -92,37 +92,49 @@ def measure_choice(task, output):
     return choice, evidence
 
 
-# def sigmoid(x, L, x0, k, b):
-#     """
-#     Sigmoid function
-#     L: the curve's maximum value
-#     x0: the x-value of the sigmoid's midpoint
-#     k: the steepness of the curve
-#     b: the y-axis intercept
-#     """
-#     return L / (1 + np.exp(-k * (x - x0))) + b
+def measure_angle(v1, v2):
+    return torch.acos(torch.sum(v1 * v2, dim=0) / (v1.norm(dim=0) * v2.norm(dim=0)))
 
 
-# def fit_sigmoid(s, p):
-#     """
-#     Fit sigmoid function to data using curve_fit
-#     s: stimulus values
-#     p: proportion values
-#     """
-#     # Initial parameter guesses
-#     p0 = [max(p), np.median(s), 1, min(p)]
-
-#     # Fit the function
-#     popt, _ = curve_fit(sigmoid, s, p, p0, method="lm")
-
-#     return popt
+def rotate_by_angle(v, rad, epochs=1000, lr=0.1, atol=1e-6, rtol=1e-6):
+    assert (rad >= 0) and (rad <= torch.pi / 2), "Rotation angle must be between 0 and pi/2"
+    rad = torch.tensor(rad)
+    vprime = torch.randn_like(v)
+    vprime.requires_grad = True
+    for _ in range(epochs):
+        angles = measure_angle(vprime, v)
+        loss = torch.sum((angles - rad) ** 2)
+        loss.backward()
+        with torch.no_grad():
+            vprime -= lr * vprime.grad
+            vprime /= vprime.norm(dim=0)
+        vprime.grad.zero_()
+        if torch.allclose(angles, rad, atol=atol, rtol=rtol):
+            break
+    vprime = vprime / vprime.norm(dim=0) * v.norm(dim=0)
+    return vprime.detach()
 
 
 @torch.no_grad()
-def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_target="intrinsic", num_trials=100, verbose=False):
+def test_and_perturb(
+    net,
+    task,
+    psychometric_edges,
+    perturb_ratio=0.1,
+    perturb_type="random",
+    perturb_target="intrinsic",
+    num_trials=100,
+    verbose=False,
+):
     def _update_parameter(parameter, perturb_ratio):
-        update = perturb_ratio * parameter * torch.randn_like(parameter)
-        return parameter + update
+        if perturb_type == "random":
+            update = perturb_ratio * parameter * torch.randn_like(parameter)
+            return parameter + update
+        elif perturb_type == "rotation":
+            update = rotate_by_angle(parameter, perturb_ratio)
+            return update
+        else:
+            raise ValueError(f"Unknown perturb type: {perturb_type}, recognized: 'random', 'rotation'")
 
     pnet = deepcopy(net)
     pnet.eval()
@@ -235,12 +247,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
     else:
         kwargs = {}
 
-    net = model_constructor(
-        task.input_dimensionality(),
-        args["num_neurons"],
-        task.output_dimensionality(),
-        **kwargs
-    )
+    net = model_constructor(task.input_dimensionality(), args["num_neurons"], task.output_dimensionality(), **kwargs)
 
     net.load_state_dict(model)
     net = net.to(device)
