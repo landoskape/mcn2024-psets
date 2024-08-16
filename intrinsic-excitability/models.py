@@ -5,12 +5,18 @@ from math import sqrt
 
 
 class FullRNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1):
+    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="relu"):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.alpha = alpha
+        if nlfun == "relu":
+            self.nlfun = torch.relu
+        elif nlfun == "tanh":
+            self.nlfun = torch.tanh
+        else:
+            raise ValueError(f"nlfun ({nlfun}) not recognized, permitted are: ['relu', 'tanh']")
 
         # Input layer
         self.input_weights = torch.nn.Parameter(torch.randn((hidden_dim, input_dim)) / sqrt(hidden_dim) / sqrt(input_dim))
@@ -27,7 +33,7 @@ class FullRNN(nn.Module):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * torch.relu(x)
+        return torch.exp(self.hidden_gain) * self.nlfun(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -58,7 +64,7 @@ class FullRNN(nn.Module):
 
 
 class RNN(nn.Module, ABC):
-    def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1, alpha=0.1):
+    def __init__(self, input_dim, hidden_dim, output_dim, input_rank=1, recurrent_rank=1, alpha=0.1, nlfun="relu"):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -66,7 +72,13 @@ class RNN(nn.Module, ABC):
         self.input_rank = input_rank
         self.recurrent_rank = recurrent_rank
         self.alpha = alpha
-
+        if nlfun == "relu":
+            self.nlfun = torch.relu
+        elif nlfun == "tanh":
+            self.nlfun = torch.tanh
+        else:
+            raise ValueError(f"nlfun ({nlfun}) not recognized, permitted are: ['relu', 'tanh']")
+        
         # Input layer
         self.input_projective = torch.nn.Parameter(torch.randn((hidden_dim, input_rank)) / sqrt(hidden_dim))
         self.input_receptive = torch.nn.Parameter(torch.randn((input_dim, input_rank)) / sqrt(input_dim))
@@ -130,7 +142,7 @@ class GainRNN(RNN):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * torch.relu(x - self.hidden_threshold)
+        return torch.exp(self.hidden_gain) * self.nlfun(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -145,7 +157,7 @@ class TauRNN(RNN):
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return torch.exp(self.hidden_gain) * torch.relu(x)
+        return torch.exp(self.hidden_gain) * self.nlfun(x)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""

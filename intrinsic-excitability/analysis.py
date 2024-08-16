@@ -127,24 +127,32 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
     pnet = deepcopy(net)
     pnet.eval()
 
-    learning_tau = type(pnet) == models.TauRNN
+    fullrnn = type(pnet) == models.FullRNN
+    learning_tau = (type(pnet) == models.TauRNN) or fullrnn
     if perturb_target == "intrinsic":
         base_hidden_gain = pnet.hidden_gain.data.clone()
         if learning_tau:
             base_hidden_tau = pnet.hidden_tau.data.clone()
         else:
             base_hidden_threshold = pnet.hidden_threshold.data.clone()
-    elif perturb_target == "receptive":
+    elif perturb_target == "receptive" and not fullrnn:
         base_reccurent_receptive = pnet.reccurent_receptive.data.clone()
-    elif perturb_target == "projective":
+    elif perturb_target == "projective" and not fullrnn:
         base_reccurent_projective = pnet.reccurent_projective.data.clone()
+    elif fullrnn:
+        recurrent_weights = pnet.recurrent_weights.data.clone()
+        base_recurrent_projective, base_recurrent_scale, base_recurrent_receptive = torch.linalg.svd(recurrent_weights)
+        base_recurrent_scale = torch.diag(base_recurrent_scale)
+        base_recurrent_background = base_recurrent_projective[:, 2:] @ base_recurrent_scale[2:][:, 2:] @ base_recurrent_receptive[2:]
+        base_recurrent_projective = base_recurrent_projective[:, :2]
+        base_recurrent_scale = base_recurrent_scale[:2][:, :2]
+        base_recurrent_receptive = base_recurrent_receptive[:2]
     else:
         raise ValueError(f"Unknown perturb target: {perturb_target}, recognized: 'intrinsic', 'receptive', 'projective'")
 
     loss = torch.zeros(num_trials)
     accuracy = torch.zeros(num_trials)
     evidence = torch.zeros(num_trials)
-    print("from test and perturb", evidence.shape)
     fixation = torch.zeros(num_trials)
     psychometric = torch.zeros(num_trials, len(psychometric_edges) - 1)
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
@@ -160,9 +168,19 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
             else:
                 pnet.hidden_threshold.data = _update_parameter(base_hidden_threshold, perturb_ratio)
         elif perturb_target == "receptive":
-            pnet.reccurent_receptive.data = _update_parameter(base_reccurent_receptive, perturb_ratio)
+            if fullrnn:
+                new_receptive = _update_parameter(base_recurrent_receptive, perturb_ratio)
+                new_combo = base_recurrent_projective @ base_recurrent_scale @ new_receptive
+                pnet.recurrent_weights.data = base_recurrent_background + new_combo
+            else:
+                pnet.reccurent_receptive.data = _update_parameter(base_reccurent_receptive, perturb_ratio)
         elif perturb_target == "projective":
-            pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
+            if fullrnn:
+                new_projective = _update_parameter(base_recurrent_projective, perturb_ratio)
+                new_combo = new_projective @ base_recurrent_scale @ base_recurrent_receptive
+                pnet.recurrent_weights.data = base_recurrent_background + new_combo
+            else:
+                pnet.reccurent_projective.data = _update_parameter(base_reccurent_projective, perturb_ratio)
 
         X, target, params = task.generate_data(512, source_floor=0.0)
         outputs = pnet(X.to(device), return_hidden=False)
@@ -182,7 +200,6 @@ def test_and_perturb(net, task, psychometric_edges, perturb_ratio=0.1, perturb_t
         evidence[trial] = torch.mean(choice_evidence)
         fixation[trial] = torch.mean(c_fixation)
 
-    print("from test and perturb (end)", evidence.shape)
     return loss, accuracy, evidence, fixation, psychometric
 
 
@@ -208,15 +225,21 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         model_constructor = models.GainRNN
     elif args["network_type"] == "Tau":
         model_constructor = models.TauRNN
+    elif args["network_type"] == "Full":
+        model_constructor = models.FullRNN
     else:
         raise ValueError(f"Did not recognize network type -- {args['network_type']}")
+
+    if args["network_type"] != "Full":
+        kwargs = dict(input_rank=args["input_rank"], recurrent_rank=args["recurrent_rank"])
+    else:
+        kwargs = {}
 
     net = model_constructor(
         task.input_dimensionality(),
         args["num_neurons"],
         task.output_dimensionality(),
-        input_rank=args["input_rank"],
-        recurrent_rank=args["recurrent_rank"],
+        **kwargs
     )
 
     net.load_state_dict(model)
@@ -247,7 +270,6 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         c_loss, c_acc, c_ev, c_fix, c_psy = test_and_perturb(
             net, task, psychometric_edges, perturb_ratio=perturb_ratio, perturb_target="intrinsic", num_trials=num_trials
         )
-        print("HIIIIII", c_ev.shape, evidence_intrinsic.shape)
         loss_intrinsic[i] = c_loss
         accuracy_intrinsic[i] = c_acc
         evidence_intrinsic[i] = c_ev
