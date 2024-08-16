@@ -220,7 +220,7 @@ def test_and_perturb(
                     new_receptive = _update_parameter(base_recurrent_receptive, perturb_ratio)
                 else:
                     new_receptive = perturbed_receptive[:, :, trial]
-                new_combo = base_recurrent_projective @ base_recurrent_scale @ new_receptive
+                new_combo = base_recurrent_projective @ base_recurrent_scale @ new_receptive.T
                 pnet.recurrent_weights.data = base_recurrent_background + new_combo
             else:
                 pnet.reccurent_receptive.data = _update_parameter(base_recurrent_receptive, perturb_ratio)
@@ -230,7 +230,7 @@ def test_and_perturb(
                     new_projective = _update_parameter(base_recurrent_projective, perturb_ratio)
                 else:
                     new_projective = perturbed_projective[:, :, trial]
-                new_combo = new_projective @ base_recurrent_scale @ base_recurrent_receptive
+                new_combo = new_projective @ base_recurrent_scale @ base_recurrent_receptive.T
                 pnet.recurrent_weights.data = base_recurrent_background + new_combo
             else:
                 pnet.reccurent_projective.data = _update_parameter(base_recurrent_projective, perturb_ratio)
