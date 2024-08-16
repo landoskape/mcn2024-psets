@@ -133,7 +133,7 @@ class ContextualGoNogo(Task):
         # Use the desired delay time if provided, otherwise use the default
         delay_time = delay_time or self.delay_time
         # Measure choice, measure evidence
-        choice, evidence = measure_choice(self, output)
+        choice, evidence = measure_choice(self, output, delay_time=delay_time)
         # Measure fixation error (ability to hold fixation before decision time)
         fixation = torch.sum(output[:, : self.stim_time + delay_time] ** 2, dim=(1, 2))
         return choice, evidence, fixation

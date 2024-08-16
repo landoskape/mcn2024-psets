@@ -85,8 +85,9 @@ def create_cdf_proportional_bins(num_bins, std_dev=1, range_multiplier=2):
     return bin_edges
 
 
-def measure_choice(task, output):
-    start_decision = task.stim_time + task.delay_time
+def measure_choice(task, output, delay_time=None):
+    delay_time = delay_time or task.delay_time
+    start_decision = task.stim_time + delay_time
     evidence = output[:, start_decision:].sum(dim=1)
     choice = 1 * (evidence[:, 0] < evidence[:, 1])
     return choice, evidence
