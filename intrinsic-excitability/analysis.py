@@ -98,6 +98,8 @@ def measure_angle(v1, v2):
 
 def rotate_by_angle(v, rad, epochs=1000, lr=0.1, atol=1e-6, rtol=1e-6):
     assert (rad >= 0) and (rad <= torch.pi / 2), "Rotation angle must be between 0 and pi/2"
+    if rad == 0.0:
+        return v.clone()
     rad = torch.tensor(rad)
     vprime = torch.randn_like(v)
     vprime.requires_grad = True
