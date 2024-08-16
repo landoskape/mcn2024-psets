@@ -271,7 +271,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, num_trials, psychometric_
         stim_time=task_params["stim_time"],
         delay_time=args["end_delay"],
         decision_time=task_params["decision_time"],
-        task_type=args["task_type"],
+        task_type=args["task_type"] if "task_type" in args else "embedded",
     )
     task.cursors = task_params["cursors"]
 
