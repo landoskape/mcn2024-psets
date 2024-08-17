@@ -350,7 +350,6 @@ if __name__ == "__main__":
     num_targets = len(perturb_targets)
     num_models = len(model_indices)
     num_centers = len(psychometric_edges) - 1
-    
 
     loss = torch.zeros(num_models, num_ratios, num_targets, num_trials)
     accuracy = torch.zeros(num_models, num_ratios, num_targets, num_trials)
@@ -365,7 +364,7 @@ if __name__ == "__main__":
         evidence[i] = results["evidence"]
         fixation[i] = results["fixation"]
         psychometric[i] = torch.mean(results["psychometric"], dim=2)
-        
+
         # Save results every time it's finished so if the timeout happens we still have results...
         results = dict(
             jobid=jobid,
@@ -377,7 +376,7 @@ if __name__ == "__main__":
             accuracy=accuracy[:i],
             evidence=evidence[:i],
             fixation=fixation[:i],
-            psychometric=psychometric[:i]
+            psychometric=psychometric[:i],
         )
 
         torch.save(results, directory / f"perturb_results_{perturb_type}{suffix}.pt")
