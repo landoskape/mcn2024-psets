@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=64              # cpu-cores per task (>1 if multi-threaded tasks)
 #SBATCH --gres=gpu:1                    # number of allocated gpus per node
 #SBATCH --mem=100G                     # total memory per node (4 GB per cpu-core is default)
-#SBATCH --time=08:00:00                 # total run time limit (HH:MM:SS)
+#SBATCH --time=02:00:00                 # total run time limit (HH:MM:SS)
 #SBATCH --mail-type=begin               # send email when job begins
 #SBATCH --mail-type=end                 # send email when job ends
 
@@ -23,7 +23,7 @@ conda activate networkAlignmentAnalysis
 start_time=$(date +%s)
 
 # this is the command that initiates the processes
-python intrinsic-excitability/run.py --num_models 100 --network_type Full --nlfun tanh --num_epochs 6000 --task_type privileged --no_recurrent_learning --no_input_learning --no_readout_learning
+python intrinsic-excitability/run.py --num_models 40 --network_type Full --nlfun tanh --num_epochs 6000 --no_recurrent_learning --no_input_learning --no_readout_learning
 
 # record the end time
 end_time=$(date +%s)

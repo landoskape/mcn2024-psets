@@ -40,17 +40,19 @@ class FullRNN(nn.Module):
 
         # Recurrent layer intrinsic properties
         self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
-        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
         # Recurrent layer connections
         self.recurrent_weights = torch.nn.Parameter(torch.randn((hidden_dim, hidden_dim)) / hidden_dim)
 
         # Readout layer
         self.readout = nn.Linear(hidden_dim, output_dim)
+        self.readout_scale = nn.Parameter(torch.tensor(1.0))
 
     def activation(self, x):
         """required for setting the relevant activation function"""
-        return self.gainfun(self.hidden_gain) * self.nlfun(x)
+        return self.gainfun(self.hidden_gain) * self.nlfun(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
@@ -73,7 +75,7 @@ class FullRNN(nn.Module):
             h = self.update_hidden(h, dh)
             if return_hidden:
                 hidden[:, step] = h
-            out[:, step] = self.readout(h)
+            out[:, step] = self.readout_scale * self.readout(h)
 
         if return_hidden:
             return out, hidden
@@ -185,7 +187,7 @@ class GainRNN(RNN):
     def set_recurrent_intrinsic(self):
         """required for setting the relevant intrinsic parameters"""
         self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
-        self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim))
+        self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
 
     def activation(self, x):
         """required for setting the relevant activation function"""
@@ -205,6 +207,22 @@ class TauRNN(RNN):
     def activation(self, x):
         """required for setting the relevant activation function"""
         return self.gainfun(self.hidden_gain) * self.nlfun(x)
+
+    def update_hidden(self, h, dh):
+        """required for updating the hidden state"""
+        return h + dh * self.taufun(self.hidden_tau) * self.alpha * self.tauscale
+    
+
+class IntrinsicRNN(RNN):
+    def set_recurrent_intrinsic(self):
+        """required for setting the relevant intrinsic parameters"""
+        self.hidden_gain = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_tau = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+        self.hidden_threshold = torch.nn.Parameter(torch.randn(self.hidden_dim) / 10)
+
+    def activation(self, x):
+        """required for setting the relevant activation function"""
+        return self.gainfun(self.hidden_gain) * self.nlfun(x - self.hidden_threshold)
 
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""

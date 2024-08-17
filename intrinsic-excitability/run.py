@@ -37,19 +37,22 @@ def get_args():
     parser.add_argument("--task_type", type=str, default="privileged")
     parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--input_dimensions", type=int, default=10)
-    parser.add_argument("--num_neurons", type=int, default=512)
+    parser.add_argument("--num_neurons", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
     parser.add_argument("--num_epochs", type=int, default=3000)
     parser.add_argument("--start_sigma", type=float, default=0.1)
     parser.add_argument("--end_sigma", type=float, default=0.1)
     parser.add_argument("--stim_time", type=int, default=20)
     parser.add_argument("--start_delay", type=int, default=5)
-    parser.add_argument("--end_delay", type=int, default=50)
+    parser.add_argument("--end_delay", type=int, default=30)
     parser.add_argument("--start_source_floor", type=float, default=0.5)
     parser.add_argument("--end_source_floor", type=float, default=0.5)
     parser.add_argument("--input_rank", type=int, default=3)
-    parser.add_argument("--recurrent_rank", type=int, default=2)
-    parser.add_argument("--nlfun", type=str, default="relu")
+    parser.add_argument("--recurrent_rank", type=int, default=1)
+    parser.add_argument("--nlfun", type=str, default="tanh")
+    parser.add_argument("--gainfun", type=str, default="sigmoid")
+    parser.add_argument("--taufun", type=str, default="sigmoid")
+    parser.add_argument("--tauscale", type=int, default=10)
     parser.add_argument("--num_models", type=int, default=1)
     parser.add_argument("--no_recurrent_learning", default=False, action="store_true")
     parser.add_argument("--no_intrinsic_learning", default=False, action="store_true")
@@ -75,6 +78,9 @@ if __name__ == "__main__":
     num_epochs = (args.num_epochs // 3) * 3
     input_rank = args.input_rank
     recurrent_rank = args.recurrent_rank
+    gainfun = args.gainfun
+    taufun = args.taufun
+    tauscale = args.tauscale
 
     start_sigma = args.start_sigma
     end_sigma = args.end_sigma
@@ -117,16 +123,20 @@ if __name__ == "__main__":
             model_constructor = models.TauRNN
         elif args.network_type == "Full":
             model_constructor = models.FullRNN
+        elif args.network_type == "Intrinsic":
+            model_constructor = models.IntrinsicRNN
+            
         else:
             raise ValueError(f"Unknown network type: {args.network_type}")
 
+        kwargs = dict(
+            gainfun=gainfun,
+            taufun=taufun,
+            tauscale=tauscale,
+        )
         if args.network_type != "Full":
-            kwargs = dict(
-                input_rank=input_rank,
-                recurrent_rank=recurrent_rank,
-            )
-        else:
-            kwargs = {}
+            kwargs["input_rank"] = input_rank
+            kwargs["recurrent_rank"] = recurrent_rank
 
         net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), **kwargs)
         net = net.to(device)
@@ -151,6 +161,11 @@ if __name__ == "__main__":
 
         if args.no_readout_learning:
             turn_off = ["readout"]
+            for name, prm in net.named_parameters():
+                if name in turn_off:
+                    prm.requires_grad = False
+        else:
+            turn_off = ["readout_scale"]
             for name, prm in net.named_parameters():
                 if name in turn_off:
                     prm.requires_grad = False
