@@ -203,7 +203,7 @@ def test_and_perturb(
                 pnet.recurrent_weights.data = base_recurrent_background + new_first_rank
             else:
                 pnet.reccurent_receptive.data = perturbed_receptive[:, trial].view(-1, 1)
-        elif perturb_target == "receptive":
+        elif perturb_target == "projective":
             if fullrnn:
                 new_first_rank = base_recurrent_scale * perturbed_projective[:, trial].view(-1, 1) @ base_recurrent_receptive.view(1, -1)
                 pnet.recurrent_weights.data = base_recurrent_background + new_first_rank
