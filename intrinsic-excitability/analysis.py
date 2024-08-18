@@ -60,6 +60,34 @@ def load_results(job_id):
     return train_loss, train_accuracy, train_evidence, train_fixation
 
 
+def equal_axes(ax):
+    lims = [np.min([ax.get_xlim(), ax.get_ylim()]), np.max([ax.get_xlim(), ax.get_ylim()])]
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+
+
+def load_weight_changes(job_id):
+    directory = filepath / f"{job_id}"
+
+    # Get all models (from the directory, of the form f"model_{i}.pt")
+    model_indices = sorted([int(f.stem.split("_")[-1]) for f in directory.glob("model_*.pt")])
+
+    init_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
+    final_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
+    for i, model_index in enumerate(model_indices):
+        model, results, init = load_job(job_id, model_index=model_index, init=True)
+        init_params["hidden_gain"].append(torch.sigmoid(init["hidden_gain"]))
+        init_params["hidden_tau"].append(torch.sigmoid(init["hidden_tau"]) * results["args"]["tauscale"])
+        init_params["hidden_threshold"].append(init["hidden_threshold"])
+        final_params["hidden_gain"].append(torch.sigmoid(model["hidden_gain"]))
+        final_params["hidden_tau"].append(torch.sigmoid(model["hidden_tau"]) * results["args"]["tauscale"])
+        final_params["hidden_threshold"].append(model["hidden_threshold"])
+    for key in init_params:
+        init_params[key] = torch.stack(init_params[key])
+        final_params[key] = torch.stack(final_params[key])
+    return init_params, final_params
+
+
 def load_perturbation(job_id, suffix=""):
     if suffix != "" and suffix[0] != "_":
         suffix = f"_{suffix}"
@@ -177,8 +205,10 @@ def test_and_perturb(
     # Generate all the updates across trials at once to avoid the overhead of autograd
     if perturb_target == "gain":
         perturbed_gain = _update_parameter(torch.sigmoid(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_gain = torch.clamp(perturbed_gain, 0)
     elif perturb_target == "tau":
         perturbed_tau = _update_parameter(torch.sigmoid(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_tau = torch.clamp(perturbed_tau, 0)
     elif perturb_target == "threshold":
         perturbed_threshold = _update_parameter(base_hidden_threshold.unsqueeze(1).expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "receptive":
