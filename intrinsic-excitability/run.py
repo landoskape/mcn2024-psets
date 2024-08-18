@@ -163,7 +163,7 @@ if __name__ == "__main__":
         train_fixation = torch.zeros(num_epochs)
 
         # Training loop
-        for epoch in range(num_epochs):
+        for epoch in tqdm(range(num_epochs)):
             X, target, params = task.generate_data(
                 B,
                 sigma=sigma[epoch],
