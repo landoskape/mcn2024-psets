@@ -5,7 +5,17 @@ from math import sqrt
 
 
 class FullRNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="tanh", gainfun="sigmoid", taufun="sigmoid", tauscale=10,):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        output_dim,
+        alpha=0.1,
+        nlfun="tanh",
+        gainfun="sigmoid",
+        taufun="sigmoid",
+        tauscale=10,
+    ):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -177,7 +187,6 @@ class RNN(nn.Module, ABC):
         for step in range(seq_length):
             x_in = (self.input_weight() @ x[:, step].T).T
             r_in = (self.J() @ h.T).T
-            print(step, torch.max(r_in))
             dh = -h + self.activation(r_in + x_in)
             h = self.update_hidden(h, dh)
             if return_hidden:
@@ -258,7 +267,7 @@ def build_model(args, task):
         model_constructor = IntrinsicRNN
 
     else:
-        raise ValueError(f"Unknown network type: {args["network_type"]}")
+        raise ValueError(f"Unknown network type: {args['network_type']}")
 
     kwargs = dict(
         nlfun=args["nlfun"],
@@ -270,6 +279,6 @@ def build_model(args, task):
         kwargs["input_rank"] = args["input_rank"]
         kwargs["recurrent_rank"] = args["recurrent_rank"]
 
-    net = model_constructor(task.input_dimensionality(), args["N"], task.output_dimensionality(), **kwargs)
+    net = model_constructor(task.input_dimensionality(), args["num_neurons"], task.output_dimensionality(), **kwargs)
 
     return net
