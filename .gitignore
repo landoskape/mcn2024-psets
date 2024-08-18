@@ -3,6 +3,8 @@ data/
 *.mat
 jobs/
 slurm-*
+.DS_Store
+
 
 # VSCODE
 .vscode/
