@@ -211,7 +211,7 @@ class TauRNN(RNN):
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
         return h + dh * self.taufun(self.hidden_tau) * self.alpha * self.tauscale
-    
+
 
 class IntrinsicRNN(RNN):
     def set_recurrent_intrinsic(self):

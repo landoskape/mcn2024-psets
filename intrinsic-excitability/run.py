@@ -125,7 +125,7 @@ if __name__ == "__main__":
             model_constructor = models.FullRNN
         elif args.network_type == "Intrinsic":
             model_constructor = models.IntrinsicRNN
-            
+
         else:
             raise ValueError(f"Unknown network type: {args.network_type}")
 

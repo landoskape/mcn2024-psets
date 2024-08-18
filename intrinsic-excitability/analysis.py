@@ -120,6 +120,10 @@ def rotate_by_angle(v, rad, epochs=1000, lr=0.1, atol=1e-6, rtol=1e-6):
     return vprime.detach()
 
 
+def inverse_sigmoid(x):
+    return torch.log(x / (1 - x))
+
+
 @torch.no_grad()
 def test_and_perturb(
     net,
@@ -172,11 +176,11 @@ def test_and_perturb(
 
     # Generate all the updates across trials at once to avoid the overhead of autograd
     if perturb_target == "gain":
-        perturbed_gain = _update_parameter(torch.exp(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_gain = _update_parameter(torch.sigmoid(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "tau":
-        perturbed_tau = _update_parameter(torch.exp(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_tau = _update_parameter(torch.sigmoid(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "threshold":
-        perturbed_threshold = _update_parameter(torch.exp(base_hidden_threshold).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_threshold = _update_parameter(base_hidden_threshold.unsqueeze(1).expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "receptive":
         perturbed_receptive = _update_parameter(base_recurrent_receptive.expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "projective":
@@ -192,11 +196,11 @@ def test_and_perturb(
     progress = tqdm(range(num_trials)) if verbose else range(num_trials)
     for trial in progress:
         if perturb_target == "gain":
-            pnet.hidden_gain.data = torch.log(perturbed_gain[:, trial])
+            pnet.hidden_gain.data = inverse_sigmoid(perturbed_gain[:, trial])
         elif perturb_target == "tau":
-            pnet.hidden_tau.data = torch.log(perturbed_tau[:, trial])
+            pnet.hidden_tau.data = inverse_sigmoid(perturbed_tau[:, trial])
         elif perturb_target == "threshold":
-            pnet.hidden_threshold.data = torch.log(perturbed_threshold[:, trial])
+            pnet.hidden_threshold.data = perturbed_threshold[:, trial]
         elif perturb_target == "receptive":
             if fullrnn:
                 new_first_rank = base_recurrent_scale * base_recurrent_projective.view(-1, 1) @ perturbed_receptive[:, trial].view(1, -1)
