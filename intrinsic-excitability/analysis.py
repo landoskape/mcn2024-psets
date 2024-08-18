@@ -152,6 +152,17 @@ def inverse_sigmoid(x):
     return torch.log(x / (1 - x))
 
 
+def perturb_parameter(parameter, perturb_ratio, perturb_type):
+    if perturb_type == "random":
+        update = perturb_ratio * parameter * torch.randn_like(parameter)
+        return parameter + update
+    elif perturb_type == "rotation":
+        update = rotate_by_angle(parameter, perturb_ratio)
+        return update
+    else:
+        raise ValueError(f"Unknown perturb type: {perturb_type}, recognized: 'random', 'rotation'")
+
+
 @torch.no_grad()
 def test_and_perturb(
     net,
@@ -163,16 +174,6 @@ def test_and_perturb(
     num_trials=100,
     verbose=False,
 ):
-    def _update_parameter(parameter, perturb_ratio):
-        if perturb_type == "random":
-            update = perturb_ratio * parameter * torch.randn_like(parameter)
-            return parameter + update
-        elif perturb_type == "rotation":
-            update = rotate_by_angle(parameter, perturb_ratio)
-            return update
-        else:
-            raise ValueError(f"Unknown perturb type: {perturb_type}, recognized: 'random', 'rotation'")
-
     pnet = deepcopy(net)
     pnet.eval()
 
@@ -204,17 +205,17 @@ def test_and_perturb(
 
     # Generate all the updates across trials at once to avoid the overhead of autograd
     if perturb_target == "gain":
-        perturbed_gain = _update_parameter(torch.sigmoid(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_gain = perturb_parameter(torch.sigmoid(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio, perturb_type)
         perturbed_gain = torch.clamp(perturbed_gain, 1e-6, 1 - 1e-6)
     elif perturb_target == "tau":
-        perturbed_tau = _update_parameter(torch.sigmoid(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_tau = perturb_parameter(torch.sigmoid(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio, perturb_type)
         perturbed_tau = torch.clamp(perturbed_tau, 1e-6, 1 - 1e-6)
     elif perturb_target == "threshold":
-        perturbed_threshold = _update_parameter(base_hidden_threshold.unsqueeze(1).expand(-1, num_trials), perturb_ratio)
+        perturbed_threshold = perturb_parameter(base_hidden_threshold.unsqueeze(1).expand(-1, num_trials), perturb_ratio, perturb_type)
     elif perturb_target == "receptive":
-        perturbed_receptive = _update_parameter(base_recurrent_receptive.expand(-1, num_trials), perturb_ratio)
+        perturbed_receptive = perturb_parameter(base_recurrent_receptive.expand(-1, num_trials), perturb_ratio, perturb_type)
     elif perturb_target == "projective":
-        perturbed_projective = _update_parameter(base_recurrent_projective.expand(-1, num_trials), perturb_ratio)
+        perturbed_projective = perturb_parameter(base_recurrent_projective.expand(-1, num_trials), perturb_ratio, perturb_type)
     else:
         raise ValueError("Unknown perturb target")
 
@@ -284,24 +285,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, perturb_targets, num_tria
     )
     task.cursors = task_params["cursors"]
 
-    if args["network_type"] == "Gain":
-        model_constructor = models.GainRNN
-    elif args["network_type"] == "Tau":
-        model_constructor = models.TauRNN
-    elif args["network_type"] == "Full":
-        model_constructor = models.FullRNN
-    elif args["network_type"] == "Intrinsic":
-        model_constructor = models.IntrinsicRNN
-    else:
-        raise ValueError(f"Did not recognize network type -- {args['network_type']}")
-
-    if args["network_type"] != "Full":
-        kwargs = dict(input_rank=args["input_rank"], recurrent_rank=args["recurrent_rank"])
-    else:
-        kwargs = {}
-
-    net = model_constructor(task.input_dimensionality(), args["num_neurons"], task.output_dimensionality(), **kwargs)
-
+    net = models.build_model(args, task)
     net.load_state_dict(model)
     net = net.to(device)
 

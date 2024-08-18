@@ -5,7 +5,7 @@ from math import sqrt
 
 
 class FullRNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="relu", gainfun="sigmoid", taufun="sigmoid", tauscale=10):
+    def __init__(self, input_dim, hidden_dim, output_dim, alpha=0.1, nlfun="tanh", gainfun="sigmoid", taufun="sigmoid", tauscale=10,):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -91,7 +91,7 @@ class RNN(nn.Module, ABC):
         input_rank=1,
         recurrent_rank=1,
         alpha=0.1,
-        nlfun="relu",
+        nlfun="tanh",
         gainfun="sigmoid",
         taufun="sigmoid",
         tauscale=10,
@@ -159,27 +159,41 @@ class RNN(nn.Module, ABC):
     def J(self):
         return self.reccurent_projective @ self.reccurent_receptive.t()
 
-    def forward(self, x, return_hidden=False):
+    def forward(self, x, return_hidden=False, return_currents=False):
         # Initialize hidden states and outputs
         batch_size = x.size(0)
         seq_length = x.size(1)
         if return_hidden:
             hidden = torch.zeros((batch_size, seq_length, self.hidden_dim), device=x.device)
+        if return_currents:
+            xx_in = torch.zeros((batch_size, seq_length, self.hidden_dim), device=x.device)
+            rr_in = torch.zeros((batch_size, seq_length, self.hidden_dim), device=x.device)
+            dh_in = torch.zeros((batch_size, seq_length, self.hidden_dim), device=x.device)
+
         out = torch.zeros((batch_size, seq_length, self.output_dim), device=x.device)
+        h = torch.zeros((batch_size, self.hidden_dim), device=x.device)
 
         # Recurrent loop
-        h = torch.zeros((batch_size, self.hidden_dim), device=x.device)
         for step in range(seq_length):
             x_in = (self.input_weight() @ x[:, step].T).T
             r_in = (self.J() @ h.T).T
+            print(step, torch.max(r_in))
             dh = -h + self.activation(r_in + x_in)
             h = self.update_hidden(h, dh)
             if return_hidden:
                 hidden[:, step] = h
+            if return_currents:
+                xx_in[:, step] = x_in
+                rr_in[:, step] = r_in
+                dh_in[:, step] = dh
             out[:, step] = self.readout(h)
 
-        if return_hidden:
+        if return_hidden and not return_currents:
             return out, hidden
+        if return_currents and not return_hidden:
+            return out, xx_in, rr_in, dh_in
+        if return_currents and return_hidden:
+            return out, hidden, xx_in, rr_in, dh_in
         return out
 
 
@@ -227,3 +241,35 @@ class IntrinsicRNN(RNN):
     def update_hidden(self, h, dh):
         """required for updating the hidden state"""
         return h + dh * self.taufun(self.hidden_tau) * self.alpha * self.tauscale
+
+
+def build_model(args, task):
+    if not isinstance(args, dict):
+        args = vars(args)
+
+    # Create network
+    if args["network_type"] == "Gain":
+        model_constructor = GainRNN
+    elif args["network_type"] == "Tau":
+        model_constructor = TauRNN
+    elif args["network_type"] == "Full":
+        model_constructor = FullRNN
+    elif args["network_type"] == "Intrinsic":
+        model_constructor = IntrinsicRNN
+
+    else:
+        raise ValueError(f"Unknown network type: {args["network_type"]}")
+
+    kwargs = dict(
+        nlfun=args["nlfun"],
+        gainfun=args["gainfun"],
+        taufun=args["taufun"],
+        tauscale=args["tauscale"],
+    )
+    if args["network_type"] != "Full":
+        kwargs["input_rank"] = args["input_rank"]
+        kwargs["recurrent_rank"] = args["recurrent_rank"]
+
+    net = model_constructor(task.input_dimensionality(), args["N"], task.output_dimensionality(), **kwargs)
+
+    return net

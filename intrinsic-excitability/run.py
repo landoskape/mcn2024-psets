@@ -74,14 +74,8 @@ if __name__ == "__main__":
     # Hyperparameters
     B = args.batch_size  # Batch size
     D = args.input_dimensions  # Input dimensions
-    N = args.num_neurons  # Number of recurrent neurons
     learning_rate = args.learning_rate
     num_epochs = (args.num_epochs // 3) * 3
-    input_rank = args.input_rank
-    recurrent_rank = args.recurrent_rank
-    gainfun = args.gainfun
-    taufun = args.taufun
-    tauscale = args.tauscale
 
     start_sigma = args.start_sigma
     end_sigma = args.end_sigma
@@ -124,28 +118,7 @@ if __name__ == "__main__":
 
     for imodel in range(num_models):
         # Create network
-        if args.network_type == "Gain":
-            model_constructor = models.GainRNN
-        elif args.network_type == "Tau":
-            model_constructor = models.TauRNN
-        elif args.network_type == "Full":
-            model_constructor = models.FullRNN
-        elif args.network_type == "Intrinsic":
-            model_constructor = models.IntrinsicRNN
-
-        else:
-            raise ValueError(f"Unknown network type: {args.network_type}")
-
-        kwargs = dict(
-            gainfun=gainfun,
-            taufun=taufun,
-            tauscale=tauscale,
-        )
-        if args.network_type != "Full":
-            kwargs["input_rank"] = input_rank
-            kwargs["recurrent_rank"] = recurrent_rank
-
-        net = model_constructor(task.input_dimensionality(), N, task.output_dimensionality(), **kwargs)
+        net = models.build_model(args, task)
         net = net.to(device)
 
         if args.no_input_learning:
