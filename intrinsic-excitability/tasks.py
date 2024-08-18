@@ -129,16 +129,21 @@ class ContextualGoNogo(Task):
     def sequence_length(self):
         return self.stim_time + self.delay_time + self.decision_time
 
-    def analyze_response(self, output, delay_time=None):
+    def analyze_response(self, output, delay_time=None, mask=None):
         # Use the desired delay time if provided, otherwise use the default
         delay_time = delay_time or self.delay_time
         # Measure choice, measure evidence
         choice, evidence = measure_choice(self, output, delay_time=delay_time)
         # Measure fixation error (ability to hold fixation before decision time)
-        fixation = torch.sum(output[:, : self.stim_time + delay_time] ** 2, dim=(1, 2))
+        if mask is None:
+            fixation = torch.sum(output[:, : self.stim_time + delay_time] ** 2, dim=(1, 2))
+        elif mask == "predecision":
+            fixation = torch.sum(output[:, : self.stim_time] ** 2, dim=(1, 2))
+        else:
+            raise ValueError("didn't recognize mask!")
         return choice, evidence, fixation
 
-    def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0):
+    def generate_data(self, B, sigma=None, delay_time=None, source_strength=1.0, source_floor=0.0, mask=None):
         """Generate a batch of data with B batch elements"""
         # Generate random source strength
         sources = torch.stack([self._generate_source(B, source_strength, source_floor) for _ in range(self.num_contexts)], dim=1)
@@ -165,8 +170,18 @@ class ContextualGoNogo(Task):
         labels = (s_target > 0).long()  # (targets - 1 means Go, 0 means NoGo)
 
         # Add fixation trigger
-        fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
-        fixation[:, : self.stim_time + delay_time] = 1.0
+        if mask is None:
+            fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
+            fixation[:, : self.stim_time + delay_time] = 1.0
+            loss_mask = torch.tensor(1.0)
+        elif mask == "predecision":
+            fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
+            fixation[:, : self.stim_time] = 1.0
+            loss_mask = 1.0 - fixation[0]  # just need one vector since it's the same across the batch
+            loss_mask[self.stim_time + delay_time :] = 1.0
+        else:
+            raise ValueError(f"Did not recognize mask, received: {mask} but expected [None, 'predecision']")
+
         X = torch.cat([X, fixation], dim=2)
 
         # Add context index to X
@@ -185,6 +200,7 @@ class ContextualGoNogo(Task):
             s_empirical=s_empirical,
             context_idx=context_idx,
             labels=labels,
+            loss_mask=loss_mask,
         )
         return X, target, params
 

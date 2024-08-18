@@ -36,6 +36,7 @@ def get_args():
     parser.add_argument("--network_type", type=str, default="Tau")
     parser.add_argument("--task_type", type=str, default="privileged")
     parser.add_argument("--batch_size", type=int, default=1000)
+    parser.add_argument("--mask", type=str, default=None)
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
@@ -113,7 +114,13 @@ if __name__ == "__main__":
         args.input_dimensions = 2
 
     task = tasks.ContextualGoNogo(D, sigma, stim_time=args.stim_time, delay_time=args.end_delay, num_contexts=2, task_type=args.task_type)
-    loss_function = nn.MSELoss()
+
+    def loss_function(outputs, targets, mask=None):
+        difference = (outputs - targets).pow(2)
+        if mask is None:
+            return difference.mean()
+        else:
+            return (difference * mask.view(-1, 1).expand(-1, targets.size(2))).mean()
 
     for imodel in range(num_models):
         # Create network
@@ -190,15 +197,16 @@ if __name__ == "__main__":
                 delay_time=delay_time[epoch],
                 source_strength=1.0,
                 source_floor=source_floor[epoch],
+                mask=args.mask,
             )
 
             optimizer.zero_grad()
             outputs, hidden = net(X.to(device), return_hidden=True)
-            loss = loss_function(outputs, target.to(device))
+            loss = loss_function(outputs, target.to(device), mask=args.mask if args.mask is None else params["loss_mask"].to(device))
             loss.backward()
             optimizer.step()
 
-            choice, evidence, fixation = task.analyze_response(outputs, delay_time=delay_time[epoch])
+            choice, evidence, fixation = task.analyze_response(outputs, delay_time=delay_time[epoch], mask=args.mask)
             choice_evidence = evidence[:, 1] - evidence[:, 0]
             choice_evidence[params["labels"] == 0] *= -1
 
