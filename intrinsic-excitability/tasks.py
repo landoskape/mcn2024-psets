@@ -89,7 +89,7 @@ class GoNogo(Task):
 
 
 class ContextualGoNogo(Task):
-    def __init__(self, D, sigma, num_contexts=2, stim_time=20, delay_time=10, decision_time=10, task_type="embedded"):
+    def __init__(self, D, sigma, num_contexts=2, stim_time=20, delay_time=10, decision_time=10, task_type="embedded", mask="none"):
         if task_type == "embedded":
             self.D = D
         elif task_type == "privileged":
@@ -103,6 +103,7 @@ class ContextualGoNogo(Task):
         self.delay_time = delay_time
         self.decision_time = decision_time
         self.sigma = sigma
+        self.mask = mask
 
         assert self.num_contexts >= 1, "Number of contexts must be greater than or equal to 1"
         assert self.num_contexts <= self.D, "Number of contexts must be less than the dimensionality"
@@ -130,12 +131,13 @@ class ContextualGoNogo(Task):
         return self.stim_time + self.delay_time + self.decision_time
 
     def analyze_response(self, output, delay_time=None, mask=None):
+        mask = mask or self.mask
         # Use the desired delay time if provided, otherwise use the default
         delay_time = delay_time or self.delay_time
         # Measure choice, measure evidence
         choice, evidence = measure_choice(self, output, delay_time=delay_time)
         # Measure fixation error (ability to hold fixation before decision time)
-        if mask is None:
+        if mask == "none":
             fixation = torch.sum(output[:, : self.stim_time + delay_time] ** 2, dim=(1, 2))
         elif mask == "predecision":
             fixation = torch.sum(output[:, : self.stim_time] ** 2, dim=(1, 2))
@@ -170,14 +172,15 @@ class ContextualGoNogo(Task):
         labels = (s_target > 0).long()  # (targets - 1 means Go, 0 means NoGo)
 
         # Add fixation trigger
-        if mask is None:
+        mask = mask or self.mask
+        if mask == "none":
             fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
             fixation[:, : self.stim_time + delay_time] = 1.0
             loss_mask = torch.tensor(1.0)
         elif mask == "predecision":
             fixation = torch.zeros((B, self.stim_time + delay_time + self.decision_time, 1))
             fixation[:, : self.stim_time] = 1.0
-            loss_mask = 1.0 - fixation[0]  # just need one vector since it's the same across the batch
+            loss_mask = fixation[0].clone()  # just need one vector since it's the same across the batch
             loss_mask[self.stim_time + delay_time :] = 1.0
         else:
             raise ValueError(f"Did not recognize mask, received: {mask} but expected [None, 'predecision']")

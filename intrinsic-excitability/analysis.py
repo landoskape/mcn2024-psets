@@ -282,6 +282,7 @@ def evaluate_model(jobid, model_index, perturb_ratios, perturb_targets, num_tria
         delay_time=args["end_delay"],
         decision_time=task_params["decision_time"],
         task_type=args["task_type"] if "task_type" in args else "embedded",
+        mask=task_params["mask"] if "mask" in task_params else "none",
     )
     task.cursors = task_params["cursors"]
 

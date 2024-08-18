@@ -36,7 +36,7 @@ def get_args():
     parser.add_argument("--network_type", type=str, default="Tau")
     parser.add_argument("--task_type", type=str, default="privileged")
     parser.add_argument("--batch_size", type=int, default=1000)
-    parser.add_argument("--mask", type=str, default=None)
+    parser.add_argument("--mask", type=str, default="none")
     parser.add_argument("--input_dimensions", type=int, default=10)
     parser.add_argument("--num_neurons", type=int, default=64)
     parser.add_argument("--learning_rate", type=float, default=1e-2)
@@ -59,6 +59,7 @@ def get_args():
     parser.add_argument("--no_intrinsic_learning", default=False, action="store_true")
     parser.add_argument("--no_input_learning", default=False, action="store_true")
     parser.add_argument("--no_readout_learning", default=False, action="store_true")
+    parser.add_argument("--nosave", default=False, action="store_true")
     return parser.parse_args()
 
 
@@ -66,7 +67,8 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     args = get_args()
-    directory = set_directory()
+    if not args.nosave:
+        directory = set_directory()
 
     # Number of models to train
     num_models = args.num_models
@@ -107,7 +109,15 @@ if __name__ == "__main__":
         D = 2
         args.input_dimensions = 2
 
-    task = tasks.ContextualGoNogo(D, sigma, stim_time=args.stim_time, delay_time=args.end_delay, num_contexts=2, task_type=args.task_type)
+    task = tasks.ContextualGoNogo(
+        D,
+        sigma,
+        stim_time=args.stim_time,
+        delay_time=args.end_delay,
+        num_contexts=2,
+        task_type=args.task_type,
+        mask=args.mask,
+    )
 
     def loss_function(outputs, targets, mask=None):
         difference = (outputs - targets).pow(2)
@@ -151,7 +161,8 @@ if __name__ == "__main__":
                     prm.requires_grad = False
 
         # Save initial model
-        torch.save(net.state_dict(), directory / f"init_model_{imodel}.pt")
+        if not args.nosave:
+            torch.save(net.state_dict(), directory / f"init_model_{imodel}.pt")
 
         optimizer = torch.optim.Adam(filter(lambda x: x.requires_grad, net.parameters()), lr=learning_rate)
 
@@ -163,7 +174,7 @@ if __name__ == "__main__":
         train_fixation = torch.zeros(num_epochs)
 
         # Training loop
-        for epoch in tqdm(range(num_epochs)):
+        for epoch in tqdm(range(num_epochs), mininterval=5, maxinterval=100):
             X, target, params = task.generate_data(
                 B,
                 sigma=sigma[epoch],
@@ -193,16 +204,17 @@ if __name__ == "__main__":
                     f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}, Accuracy: {train_accuracy[epoch]:.4f}, Evidence: {train_evidence[epoch]:.4f}, Fixation: {train_fixation[epoch]:.4f}"
                 )
 
-        # Save the results
-        results = dict(
-            args=vars(args),
-            task=vars(task),
-            train_loss=train_loss,
-            train_accuracy=train_accuracy,
-            train_evidence=train_evidence,
-            train_fixation=train_fixation,
-        )
-        torch.save(results, directory / f"results_{imodel}.pt")
+        if not args.nosave:
+            # Save the results
+            results = dict(
+                args=vars(args),
+                task=vars(task),
+                train_loss=train_loss,
+                train_accuracy=train_accuracy,
+                train_evidence=train_evidence,
+                train_fixation=train_fixation,
+            )
+            torch.save(results, directory / f"results_{imodel}.pt")
 
-        # Save the network
-        torch.save(net.state_dict(), directory / f"model_{imodel}.pt")
+            # Save the network
+            torch.save(net.state_dict(), directory / f"model_{imodel}.pt")
