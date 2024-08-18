@@ -205,10 +205,10 @@ def test_and_perturb(
     # Generate all the updates across trials at once to avoid the overhead of autograd
     if perturb_target == "gain":
         perturbed_gain = _update_parameter(torch.sigmoid(base_hidden_gain).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
-        perturbed_gain = torch.clamp(perturbed_gain, 0)
+        perturbed_gain = torch.clamp(perturbed_gain, 1e-6, 1 - 1e-6)
     elif perturb_target == "tau":
         perturbed_tau = _update_parameter(torch.sigmoid(base_hidden_tau).unsqueeze(1).expand(-1, num_trials), perturb_ratio)
-        perturbed_tau = torch.clamp(perturbed_tau, 0)
+        perturbed_tau = torch.clamp(perturbed_tau, 1e-6, 1 - 1e-6)
     elif perturb_target == "threshold":
         perturbed_threshold = _update_parameter(base_hidden_threshold.unsqueeze(1).expand(-1, num_trials), perturb_ratio)
     elif perturb_target == "receptive":
