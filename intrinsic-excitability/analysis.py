@@ -113,6 +113,73 @@ def create_cdf_proportional_bins(num_bins, std_dev=1, range_multiplier=2):
     return bin_edges
 
 
+def beeswarm(y, nbins=None):
+    """thanks to: https://python-graph-gallery.com/509-introduction-to-swarm-plot-in-matplotlib/"""
+    # Convert y to a NumPy array
+    y = np.asarray(y)
+
+    # Calculate the number of bins if not provided
+    if nbins is None:
+        nbins = len(y) // 6
+
+    # Get upper and lower bounds of the data
+    x = np.zeros(len(y))
+    ylo = np.min(y)
+    yhi = np.max(y)
+
+    # Calculate the size of each bin based on the number of bins
+    dy = (yhi - ylo) / nbins
+
+    # Calculate the upper bounds of each bin using linspace
+    ybins = np.linspace(ylo + dy, yhi - dy, nbins - 1)
+
+    # Divide the indices into bins
+    i = np.arange(len(y))
+    ibs = [0] * nbins  # List to store indices for each bin
+    ybs = [0] * nbins  # List to store values for each bin
+    nmax = 0  # Variable to store the maximum number of data points in a bin
+    for j, ybin in enumerate(ybins):
+
+        # Create a boolean mask for elements that are less than or equal to the bin upper bound
+        f = y <= ybin
+
+        # Store the indices and values that belong to this bin
+        ibs[j], ybs[j] = i[f], y[f]
+
+        # Update nmax with the maximum number of elements in a bin so far
+        nmax = max(nmax, len(ibs[j]))
+
+        # Update i and y by excluding the elements already added to the current bin
+        f = ~f
+        i, y = i[f], y[f]
+
+    # Add the remaining elements to the last bin
+    ibs[-1], ybs[-1] = i, y
+    nmax = max(nmax, len(ibs[-1]))
+
+    # Assign x indices to the data points in each bin
+    dx = 1 / (nmax // 2)
+
+    for i, y in zip(ibs, ybs):
+        if len(i) > 1:
+
+            # Determine the index to start from based on whether the bin has an even or odd number of elements
+            j = len(i) % 2
+
+            # Sort the indices in the bin based on the corresponding values
+            i = i[np.argsort(y)]
+
+            # Separate the indices into two groups, 'a' and 'b'
+            a = i[j::2]
+            b = i[j + 1 :: 2]
+
+            # Assign x values to the 'a' group using positive values and to the 'b' group using negative values
+            x[a] = (0.5 + j / 3 + np.arange(len(b))) * dx
+            x[b] = (0.5 + j / 3 + np.arange(len(b))) * -dx
+
+    return x
+
+
 def measure_choice(task, output, delay_time=None):
     delay_time = delay_time or task.delay_time
     start_decision = task.stim_time + delay_time
