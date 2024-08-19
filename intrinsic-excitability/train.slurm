@@ -23,7 +23,7 @@ conda activate networkAlignmentAnalysis
 start_time=$(date +%s)
 
 # this is the command that initiates the processes
-python intrinsic-excitability/run.py --num_models 40 --network_type Full --nlfun tanh --num_epochs 3000 --mask predecision --no_input_learning --no_recurrent_learning
+python intrinsic-excitability/run.py --num_models 40 --network_type Intrinsic --nlfun tanh --num_epochs 3000 --mask predecision --no_intrinsic_learning --no_recurrent_learning
 
 # record the end time
 end_time=$(date +%s)
