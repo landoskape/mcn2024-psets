@@ -12,6 +12,9 @@ import torch.nn as nn
 import tasks
 import models
 
+from matplotlib import pyplot as plt
+
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -178,6 +181,116 @@ def beeswarm(y, nbins=None):
             x[b] = (0.5 + j / 3 + np.arange(len(b))) * -dx
 
     return x
+
+
+def create_stacked_trial_plot(X, targets, ibatch):
+    fig, ax = plt.subplots(4, 1, figsize=(6, 4), layout="constrained")
+    plt.subplots_adjust(hspace=0.1)
+
+    labels = ["Inputs", "Fixation", "Context", "Target"]
+    ymins = [-1.2, -0.6, -0.6, -0.6]
+
+    colors = ["g", "m", "k", "g", "m", "r", "b"]
+    linestyles = ["-", "-", "-", "-", "-", "-", "-"]
+    axloc = [0, 0, 1, 2, 2, 3, 3]
+
+    data = np.concatenate((X[ibatch], targets[ibatch]), axis=1)
+
+    time = np.arange(X[ibatch].shape[0])
+
+    for i, axis in enumerate(ax):
+        # Plot the d=0 line
+        axis.plot([-2, data.shape[0] + 2], [0, 0], "k--", linewidth=1)
+
+        # Remove top and right spines
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+        axis.spines["bottom"].set_visible(False)
+        axis.spines["left"].set_visible(False)
+
+        # Set limits
+        axis.set_ylim(ymins[i], 1.2)
+        axis.yaxis.set_visible(False)
+
+        # Label
+        axis.text(0, 0.5, labels[i], transform=axis.transAxes, ha="right", va="center", fontsize=10)
+
+        # Show x-axis only for the bottom subplot
+        if i < len(ax) - 1:
+            axis.xaxis.set_visible(False)
+        else:
+            axis.spines["bottom"].set_position(("outward", -10))
+
+    # Add x-label to the bottom subplot
+    ax[-1].set_xlabel("Time", fontsize=12)
+
+    for i, iax in enumerate(axloc):
+        ax[iax].plot(time, data[:, i], color=colors[i], linestyle=linestyles[i], linewidth=2)
+
+    return fig, ax
+
+
+def create_stacked_output_plot(hidden, output, ibatch, hidden_perturbed=None, output_perturbed=None):
+    fig, ax = plt.subplots(2, 1, figsize=(6, 4), layout="constrained")
+    plt.subplots_adjust(hspace=0.1)
+
+    labels = ["Hidden", "Output"]
+    colors = ["r", "b"]
+
+    time = np.arange(hidden[ibatch].shape[0])
+    hidden = hidden[ibatch].numpy()
+    output = output[ibatch].numpy()
+
+    if hidden_perturbed is not None and output_perturbed is not None:
+        hidden_perturbed = hidden_perturbed[ibatch]
+        output_perturbed = output_perturbed[ibatch]
+        plot_perturbed = True
+    else:
+        plot_perturbed = False
+
+    for i, axis in enumerate(ax):
+        # Plot the d=0 line
+        axis.plot([-2, len(time) + 2], [0, 0], "k--", linewidth=1)
+
+        # Remove top and right spines
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+        axis.spines["bottom"].set_visible(False)
+        axis.spines["left"].set_visible(False)
+
+        # Set limits
+        axis.yaxis.set_visible(False)
+
+        # Label
+        axis.text(0, 0.5, labels[i], transform=axis.transAxes, ha="right", va="center", fontsize=10)
+
+        # Show x-axis only for the bottom subplot
+        if i < len(ax) - 1:
+            axis.xaxis.set_visible(False)
+        else:
+            axis.spines["bottom"].set_position(("outward", -10))
+
+    # Add x-label to the bottom subplot
+    ax[-1].set_xlabel("Time", fontsize=12)
+
+    hylimdata = np.concatenate((hidden, hidden_perturbed)) if plot_perturbed else hidden
+    oylimdata = np.concatenate((output, output_perturbed)) if plot_perturbed else output
+    ylims_hidden = 1.1 * np.array([-1, 1]) * np.max(np.abs(hylimdata))
+    ylims_output = 1.1 * np.array([-1, 1]) * np.max(np.abs(oylimdata))
+
+    ax[0].set_ylim(ylims_hidden)
+    ax[1].set_ylim(ylims_output)
+
+    ax[0].plot(time, hidden, color="k", linewidth=1, alpha=0.7)
+    ax[1].plot(time, output[:, 0], color=colors[0], linewidth=2)
+    ax[1].plot(time, output[:, 1], color=colors[1], linewidth=2)
+
+    if plot_perturbed:
+        ax[0].plot(time, hidden_perturbed, color="r", linewidth=1, alpha=0.3)
+        ax[1].plot(time, output_perturbed[:, 0], color=colors[0], linewidth=2, linestyle="--")
+        ax[1].plot(time, output_perturbed[:, 1], color=colors[1], linewidth=2, linestyle="--")
+
+    return fig, ax
 
 
 def measure_choice(task, output, delay_time=None):
