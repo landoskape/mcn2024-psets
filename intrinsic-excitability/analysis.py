@@ -69,14 +69,25 @@ def equal_axes(ax):
     ax.set_ylim(lims)
 
 
-def load_weight_changes(job_id):
+def load_weight_changes(job_id, hidden_only=True):
     directory = filepath / f"{job_id}"
 
     # Get all models (from the directory, of the form f"model_{i}.pt")
     model_indices = sorted([int(f.stem.split("_")[-1]) for f in directory.glob("model_*.pt")])
 
-    init_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
-    final_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
+    if hidden_only:
+        init_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
+        final_params = dict(hidden_gain=[], hidden_tau=[], hidden_threshold=[])
+    else:
+        # assume they're all the same
+        model, results, init = load_job(job_id, model_index=model_indices[0], init=True)
+        init_params = {}
+        final_params = {}
+        for key in model:
+            init_params[key] = []
+            final_params[key] = []
+
+    hidden_params = ["hidden_gain", "hidden_tau", "hidden_threshold"]
     for i, model_index in enumerate(model_indices):
         model, results, init = load_job(job_id, model_index=model_index, init=True)
         init_params["hidden_gain"].append(torch.sigmoid(init["hidden_gain"]))
@@ -85,6 +96,12 @@ def load_weight_changes(job_id):
         final_params["hidden_gain"].append(torch.sigmoid(model["hidden_gain"]))
         final_params["hidden_tau"].append(torch.sigmoid(model["hidden_tau"]) * results["args"]["tauscale"])
         final_params["hidden_threshold"].append(model["hidden_threshold"])
+        if not hidden_only:
+            for key, value in init.items():
+                if key not in hidden_params:
+                    init_params[key].append(value)
+                    final_params[key].append(model[key])
+
     for key in init_params:
         init_params[key] = torch.stack(init_params[key])
         final_params[key] = torch.stack(final_params[key])
